@@ -195,7 +195,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
             <div className="lg:col-span-2 space-y-4">
               <div className="flex justify-between items-center">
                 <h4 className="font-bold text-slate-950 dark:text-white text-base">Today's Appointments</h4>
-                <button className="text-xs text-blue-600 font-semibold hover:underline">View Calendar</button>
+                {/* <button className="text-xs text-blue-600 font-semibold hover:underline">View Calendar</button> */}
               </div>
 
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
