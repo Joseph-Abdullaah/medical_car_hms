@@ -1,0 +1,6 @@
+{
+  "name": "MediCare Hospital Management System",
+  "description": "A modern multi-role Hospital Management System featuring an administrative portal, doctor scheduling, and patient history tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

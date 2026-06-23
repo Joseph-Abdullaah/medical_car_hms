@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Force light mode even if operating system has dark mode enabled */
+@variant dark (.dark &);
