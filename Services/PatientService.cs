@@ -10,76 +10,72 @@ namespace HospitalManagementSystem.Services
         private readonly PatientRepository _patientRepository = new PatientRepository();
 
         /// <summary>
-        /// Retrieves all patient accounts stored in the database.
+        /// Returns all patients with real schema columns only.
         /// </summary>
         public List<dynamic> GetAllPatients()
         {
-            var patientsList = new List<dynamic>();
+            var list = new List<dynamic>();
             try
             {
                 DataTable dt = _patientRepository.FetchAll();
                 foreach (DataRow row in dt.Rows)
                 {
-                    patientsList.Add(new
-                    {
-                        id = row["id"].ToString(),
-                        fullName = row["full_name"].ToString(),
-                        gender = row["gender"].ToString(),
-                        dob = Convert.ToDateTime(row["dob"]).ToString("yyyy-MM-dd"),
-                        bloodGroup = row["blood_group"].ToString(),
-                        phone = row["phone"].ToString(),
-                        address = row["address"].ToString(),
-                        emergencyContactName = row["emergency_contact_name"].ToString(),
-                        emergencyContactPhone = row["emergency_contact_phone"].ToString(),
-                        status = row["status"].ToString(),
-                        regDate = Convert.ToDateTime(row["reg_date"]).ToString("yyyy-MM-dd")
-                    });
+                    list.Add(MapRow(row));
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# PatientService Error] GetAllPatients failed: {ex.Message}");
+                Console.WriteLine($"[PatientService] GetAllPatients failed: {ex.Message}");
             }
-            return patientsList;
+            return list;
         }
 
         /// <summary>
-        /// Creates a new patient registration record with a distinct generated layout.
+        /// Returns a single patient by user_id.
         /// </summary>
-        public dynamic CreatePatient(string fullName, string gender, string dob, string bloodGroup, string phone, string address, string emergencyName, string emergencyPhone)
+        public dynamic GetPatientById(int userId)
         {
             try
             {
-                // Generate a unique incremental clinical patient identifier
-                string newId = "PT-" + new Random().Next(1000, 9999).ToString();
-                DateTime birthDate = DateTime.TryParse(dob, out var parsedDob) ? birthDate = parsedDob : birthDate = DateTime.Now.AddYears(-30);
-                DateTime regDate = DateTime.Now;
-
-                bool success = _patientRepository.Insert(newId, fullName, gender, birthDate, bloodGroup, phone, address, emergencyName, emergencyPhone, "Active", regDate);
-
-                if (success)
-                {
-                    return new
-                    {
-                        id = newId,
-                        fullName = fullName,
-                        gender = gender,
-                        dob = birthDate.ToString("yyyy-MM-dd"),
-                        bloodGroup = bloodGroup,
-                        phone = phone,
-                        address = address,
-                        emergencyContactName = emergencyName,
-                        emergencyContactPhone = emergencyPhone,
-                        status = "Active",
-                        regDate = regDate.ToString("yyyy-MM-dd")
-                    };
-                }
+                DataTable dt = _patientRepository.FetchById(userId);
+                if (dt.Rows.Count > 0)
+                    return MapRow(dt.Rows[0]);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# PatientService Error] CreatePatient failed: {ex.Message}");
+                Console.WriteLine($"[PatientService] GetPatientById failed: {ex.Message}");
             }
             return null;
+        }
+
+        /// <summary>
+        /// Updates an existing patient's profile fields.
+        /// </summary>
+        public bool UpdatePatientProfile(int userId, string fullName, string bloodType, string gender, string phone, string address)
+        {
+            try
+            {
+                return _patientRepository.UpdateProfile(userId, fullName, bloodType, gender, phone, address);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PatientService] UpdatePatientProfile failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static dynamic MapRow(DataRow row)
+        {
+            return new
+            {
+                id        = Convert.ToInt32(row["id"]),
+                username  = row["username"].ToString(),
+                fullName  = row["full_name"] != DBNull.Value ? row["full_name"].ToString() : "",
+                bloodType = row["blood_type"] != DBNull.Value ? row["blood_type"].ToString() : "",
+                gender    = row["gender"] != DBNull.Value ? row["gender"].ToString() : "",
+                phone     = row["phone"] != DBNull.Value ? row["phone"].ToString() : "",
+                address   = row["address"] != DBNull.Value ? row["address"].ToString() : ""
+            };
         }
     }
 }

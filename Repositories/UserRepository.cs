@@ -13,18 +13,33 @@ namespace HospitalManagementSystem.Repositories
             _connectionString = Environment.GetEnvironmentVariable("MYSQL_CONN") ?? "Server=localhost;Database=medicare_hms;Uid=root;Pwd=12345678;";
         }
 
-        public DataTable GetUserByCredentials(string username, string password, string role)
+        /// <summary>
+        /// Validates login credentials. JOINs profile table to retrieve full_name.
+        /// Returns the user row or an empty DataTable on failure.
+        /// </summary>
+        public DataTable GetUserByCredentials(string username, string passwordHash)
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "SELECT id, username, email, full_name, role, profile_image FROM users WHERE username = @user AND password = @pass AND role = @role";
-                
+
+                // Try patient login first, then doctor, then admin (admin has no profile row)
+                string query = @"
+                    SELECT
+                        u.user_id  AS id,
+                        u.username AS username,
+                        u.role     AS role,
+                        COALESCE(pp.full_name, dp.full_name, u.username) AS full_name
+                    FROM Users u
+                    LEFT JOIN Patient_Profiles pp ON u.user_id = pp.user_id AND u.role = 'PATIENT'
+                    LEFT JOIN Doctor_Profiles  dp ON u.user_id = dp.user_id AND u.role = 'DOCTOR'
+                    WHERE u.username = @user
+                      AND u.password_hash = @pass";
+
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@user", username);
-                    cmd.Parameters.AddWithValue("@pass", password);
-                    cmd.Parameters.AddWithValue("@role", role);
+                    cmd.Parameters.AddWithValue("@pass", passwordHash);
 
                     using (var adapter = new MySqlDataAdapter(cmd))
                     {
@@ -36,40 +51,101 @@ namespace HospitalManagementSystem.Repositories
             }
         }
 
-        public bool UserExists(string username, string email)
+        /// <summary>
+        /// Checks whether a username is already taken.
+        /// </summary>
+        public bool UserExists(string username)
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "SELECT COUNT(*) FROM users WHERE username = @user OR email = @email";
-                
+                string query = "SELECT COUNT(*) FROM Users WHERE username = @user";
+
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@user", username);
-                    cmd.Parameters.AddWithValue("@email", email);
-                    
                     int count = Convert.ToInt32(cmd.ExecuteScalar());
                     return count > 0;
                 }
             }
         }
 
-        public int CreateUser(string fullName, string username, string email, string password, string role)
+        /// <summary>
+        /// Inserts a new row into Users. Returns the new user_id.
+        /// </summary>
+        public int CreateUser(string username, string passwordHash, string role)
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "INSERT INTO users (username, email, full_name, password, role) VALUES (@user, @email, @name, @pass, @role); SELECT LAST_INSERT_ID();";
-                
+                string query = "INSERT INTO Users (username, password_hash, role) VALUES (@user, @pass, @role); SELECT LAST_INSERT_ID();";
+
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@user", username);
-                    cmd.Parameters.AddWithValue("@email", email);
-                    cmd.Parameters.AddWithValue("@name", fullName);
-                    cmd.Parameters.AddWithValue("@pass", password);
+                    cmd.Parameters.AddWithValue("@pass", passwordHash);
                     cmd.Parameters.AddWithValue("@role", role);
 
                     return Convert.ToInt32(cmd.ExecuteScalar());
+                }
+            }
+        }
+
+        /// <summary>
+        /// Inserts a Patient_Profiles row linked to a Users row.
+        /// </summary>
+        public bool CreatePatientProfile(int userId, string fullName)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string query = "INSERT INTO Patient_Profiles (user_id, full_name) VALUES (@uid, @name)";
+
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@uid", userId);
+                    cmd.Parameters.AddWithValue("@name", fullName);
+
+                    return cmd.ExecuteNonQuery() > 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Inserts a Doctor_Profiles row linked to a Users row.
+        /// </summary>
+        public bool CreateDoctorProfile(int userId, string fullName, int deptId)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string query = "INSERT INTO Doctor_Profiles (user_id, full_name, dept_id) VALUES (@uid, @name, @dept)";
+
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@uid", userId);
+                    cmd.Parameters.AddWithValue("@name", fullName);
+                    cmd.Parameters.AddWithValue("@dept", deptId);
+
+                    return cmd.ExecuteNonQuery() > 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Deletes a user and their profile (cascade handles profile deletion).
+        /// </summary>
+        public bool DeleteUser(int userId)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string query = "DELETE FROM Users WHERE user_id = @uid";
+
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@uid", userId);
+                    return cmd.ExecuteNonQuery() > 0;
                 }
             }
         }

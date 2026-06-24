@@ -13,15 +13,63 @@ namespace HospitalManagementSystem.Repositories
             _connectionString = Environment.GetEnvironmentVariable("MYSQL_CONN") ?? "Server=localhost;Database=medicare_hms;Uid=root;Pwd=12345678;";
         }
 
+        /// <summary>
+        /// Fetches all patients by joining Users + Patient_Profiles.
+        /// Only returns real schema columns.
+        /// </summary>
         public DataTable FetchAll()
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "SELECT id, full_name, gender, dob, blood_group, phone, address, emergency_contact_name, emergency_contact_phone, status, reg_date FROM patients ORDER BY reg_date DESC";
-                
+                string query = @"
+                    SELECT
+                        u.user_id    AS id,
+                        u.username   AS username,
+                        pp.full_name AS full_name,
+                        pp.blood_type AS blood_type,
+                        pp.gender    AS gender,
+                        pp.phone     AS phone,
+                        pp.address   AS address
+                    FROM Users u
+                    INNER JOIN Patient_Profiles pp ON u.user_id = pp.user_id
+                    WHERE u.role = 'PATIENT'
+                    ORDER BY pp.full_name ASC";
+
+                using (var cmd = new MySqlCommand(query, conn))
+                using (var adapter = new MySqlDataAdapter(cmd))
+                {
+                    var dt = new DataTable();
+                    adapter.Fill(dt);
+                    return dt;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fetches a single patient by their user_id.
+        /// </summary>
+        public DataTable FetchById(int userId)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string query = @"
+                    SELECT
+                        u.user_id    AS id,
+                        u.username   AS username,
+                        pp.full_name AS full_name,
+                        pp.blood_type AS blood_type,
+                        pp.gender    AS gender,
+                        pp.phone     AS phone,
+                        pp.address   AS address
+                    FROM Users u
+                    INNER JOIN Patient_Profiles pp ON u.user_id = pp.user_id
+                    WHERE u.user_id = @uid AND u.role = 'PATIENT'";
+
                 using (var cmd = new MySqlCommand(query, conn))
                 {
+                    cmd.Parameters.AddWithValue("@uid", userId);
                     using (var adapter = new MySqlDataAdapter(cmd))
                     {
                         var dt = new DataTable();
@@ -32,30 +80,33 @@ namespace HospitalManagementSystem.Repositories
             }
         }
 
-        public bool Insert(string id, string fullName, string gender, DateTime dob, string bloodGroup, string phone, string address, string emergencyName, string emergencyPhone, string status, DateTime regDate)
+        /// <summary>
+        /// Updates a patient's profile fields (the fields that exist in Patient_Profiles).
+        /// </summary>
+        public bool UpdateProfile(int userId, string fullName, string bloodType, string gender, string phone, string address)
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "INSERT INTO patients (id, full_name, gender, dob, blood_group, phone, address, emergency_contact_name, emergency_contact_phone, status, reg_date) " +
-                               "VALUES (@id, @name, @gender, @dob, @blood, @phone, @address, @emName, @emPhone, @status, @reg)";
-                
+                string query = @"
+                    UPDATE Patient_Profiles
+                    SET full_name  = @name,
+                        blood_type = @blood,
+                        gender     = @gender,
+                        phone      = @phone,
+                        address    = @address
+                    WHERE user_id = @uid";
+
                 using (var cmd = new MySqlCommand(query, conn))
                 {
-                    cmd.Parameters.AddWithValue("@id", id);
-                    cmd.Parameters.AddWithValue("@name", fullName);
-                    cmd.Parameters.AddWithValue("@gender", gender);
-                    cmd.Parameters.AddWithValue("@dob", dob);
-                    cmd.Parameters.AddWithValue("@blood", bloodGroup);
-                    cmd.Parameters.AddWithValue("@phone", phone);
-                    cmd.Parameters.AddWithValue("@address", address);
-                    cmd.Parameters.AddWithValue("@emName", emergencyName);
-                    cmd.Parameters.AddWithValue("@emPhone", emergencyPhone);
-                    cmd.Parameters.AddWithValue("@status", status);
-                    cmd.Parameters.AddWithValue("@reg", regDate);
+                    cmd.Parameters.AddWithValue("@uid",    userId);
+                    cmd.Parameters.AddWithValue("@name",   fullName ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@blood",  bloodType ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@gender", gender ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@phone",  phone ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@address",address ?? (object)DBNull.Value);
 
-                    int rows = cmd.ExecuteNonQuery();
-                    return rows > 0;
+                    return cmd.ExecuteNonQuery() > 0;
                 }
             }
         }

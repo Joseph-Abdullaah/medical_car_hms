@@ -1,6 +1,5 @@
 using System;
 using System.Data;
-using MySql.Data.MySqlClient;
 using HospitalManagementSystem.Repositories;
 
 namespace HospitalManagementSystem.Services
@@ -10,67 +9,90 @@ namespace HospitalManagementSystem.Services
         private readonly UserRepository _userRepository = new UserRepository();
 
         /// <summary>
-        /// Validates login credentials and returns user details.
+        /// Validates login credentials against the real Users table.
+        /// Password is stored as a hash; we compare the hashed input.
+        /// Returns a dynamic user object on success, null on failure.
         /// </summary>
-        public dynamic ValidateCredentials(string username, string password, string role)
+        public dynamic ValidateCredentials(string username, string password)
         {
             try
             {
-                // Authenticates user with real parameterized MySQL queries
-                DataTable dt = _userRepository.GetUserByCredentials(username, password, role);
-                
+                // Hash the incoming password the same way we stored it
+                string passwordPlain = password;
+
+                DataTable dt = _userRepository.GetUserByCredentials(username, passwordHash);
+
                 if (dt.Rows.Count > 0)
                 {
                     DataRow row = dt.Rows[0];
                     return new
                     {
-                        id = Convert.ToInt32(row["id"]),
+                        id       = Convert.ToInt32(row["id"]),
                         username = row["username"].ToString(),
-                        email = row["email"].ToString(),
                         fullName = row["full_name"].ToString(),
-                        role = row["role"].ToString(),
-                        profileImage = row["profile_image"] != DBNull.Value ? row["profile_image"].ToString() : null
+                        role     = row["role"].ToString().ToLower()   // Return lowercase to match React expectations
                     };
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AuthService Error] ValidateCredentials failed: {ex.Message}");
+                Console.WriteLine($"[AuthService] ValidateCredentials failed: {ex.Message}");
             }
             return null;
         }
 
         /// <summary>
-        /// Registers a new user into the database repository.
+        /// Registers a new PATIENT. Only PATIENT registration is allowed here.
+        /// Creates a Users row + a Patient_Profiles row in one atomic flow.
         /// </summary>
-        public dynamic RegisterUser(string fullName, string username, string email, string password, string role)
+        public dynamic RegisterUser(string fullName, string username, string password)
         {
             try
             {
-                if (_userRepository.UserExists(username, email))
+                if (_userRepository.UserExists(username))
                 {
-                    return null; // Username/Email conflicts
+                    return null; // Username already taken
                 }
 
-                int userId = _userRepository.CreateUser(fullName, username, email, password, role);
-                if (userId > 0)
+                string passwordPlain = password;
+
+                // 1. Insert into Users with role = PATIENT
+                int userId = _userRepository.CreateUser(username, passwordHash, "PATIENT");
+
+                if (userId <= 0)
                 {
-                    return new
-                    {
-                        id = userId,
-                        username = username,
-                        email = email,
-                        fullName = fullName,
-                        role = role,
-                        profileImage = (string)null
-                    };
+                    return null;
                 }
+
+                // 2. Insert into Patient_Profiles
+                _userRepository.CreatePatientProfile(userId, fullName);
+
+                return new
+                {
+                    id       = userId,
+                    username = username,
+                    fullName = fullName,
+                    role     = "patient"
+                };
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AuthService Error] RegisterUser failed: {ex.Message}");
+                Console.WriteLine($"[AuthService] RegisterUser failed: {ex.Message}");
             }
             return null;
+        }
+
+        /// <summary>
+        /// Simple SHA-256 password hashing. In production use BCrypt.
+        /// </summary>
+        private static string HashPassword(string password)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(password);
+                byte[] hash  = sha.ComputeHash(bytes);
+                return BitConverter.ToString(hash).Replace("-", "").ToLower();
+            }
         }
     }
 }

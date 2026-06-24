@@ -10,7 +10,7 @@ namespace HospitalManagementSystem.Services
         private readonly AppointmentRepository _appointmentRepository = new AppointmentRepository();
 
         /// <summary>
-        /// Retrieves all logged appointments.
+        /// Returns all appointments using real schema columns only.
         /// </summary>
         public List<dynamic> GetAllAppointments()
         {
@@ -19,66 +19,86 @@ namespace HospitalManagementSystem.Services
             {
                 DataTable dt = _appointmentRepository.FetchAll();
                 foreach (DataRow row in dt.Rows)
-                {
-                    list.Add(new
-                    {
-                        id = row["id"].ToString(),
-                        patientId = row["patient_id"].ToString(),
-                        patientName = row["patient_name"].ToString(),
-                        doctorId = row["doctor_id"].ToString(),
-                        doctorName = row["doctor_name"].ToString(),
-                        appointmentDate = Convert.ToDateTime(row["appointment_date"]).ToString("yyyy-MM-dd"),
-                        appointmentTime = row["appointment_time"].ToString(),
-                        reason = row["reason"].ToString(),
-                        clinicalNotes = row["clinical_notes"] != DBNull.Value ? row["clinical_notes"].ToString() : "",
-                        status = row["status"].ToString()
-                    });
-                }
+                    list.Add(MapAppointmentRow(row));
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AppointmentService Error] GetAllAppointments: {ex.Message}");
+                Console.WriteLine($"[AppointmentService] GetAllAppointments failed: {ex.Message}");
             }
             return list;
         }
 
         /// <summary>
-        /// Schedules a new appointment.
+        /// Returns appointments for a specific doctor (filtered by doctorId).
         /// </summary>
-        public dynamic CreateAppointment(string patientId, string doctorId, string date, string time, string reason, string notes)
+        public List<dynamic> GetAppointmentsByDoctor(int doctorId)
+        {
+            var list = new List<dynamic>();
+            try
+            {
+                DataTable dt = _appointmentRepository.FetchByDoctorId(doctorId);
+                foreach (DataRow row in dt.Rows)
+                    list.Add(MapAppointmentRow(row));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AppointmentService] GetAppointmentsByDoctor failed: {ex.Message}");
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Returns appointments for a specific patient (filtered by patientId).
+        /// </summary>
+        public List<dynamic> GetAppointmentsByPatient(int patientId)
+        {
+            var list = new List<dynamic>();
+            try
+            {
+                DataTable dt = _appointmentRepository.FetchByPatientId(patientId);
+                foreach (DataRow row in dt.Rows)
+                    list.Add(MapAppointmentRow(row));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AppointmentService] GetAppointmentsByPatient failed: {ex.Message}");
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Creates a new appointment with PENDING status.
+        /// </summary>
+        public dynamic CreateAppointment(int patientId, int doctorId, string date)
         {
             try
             {
-                string id = "APT-" + new Random().Next(1000, 9999).ToString();
-                DateTime apptDate = DateTime.TryParse(date, out var parsedDate) ? apptDate = parsedDate : apptDate = DateTime.Today;
+                DateTime apptDate = DateTime.TryParse(date, out var parsed) ? parsed : DateTime.Today;
+                int newId = _appointmentRepository.Insert(patientId, doctorId, apptDate, "PENDING");
 
-                bool success = _appointmentRepository.Insert(id, patientId, doctorId, apptDate, time, reason, notes, "Pending");
-                if (success)
+                if (newId > 0)
                 {
                     return new
                     {
-                        id = id,
-                        patientId = patientId,
-                        doctorId = doctorId,
+                        id              = newId,
+                        patientId       = patientId,
+                        doctorId        = doctorId,
                         appointmentDate = apptDate.ToString("yyyy-MM-dd"),
-                        appointmentTime = time,
-                        reason = reason,
-                        clinicalNotes = notes,
-                        status = "Pending"
+                        status          = "PENDING"
                     };
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AppointmentService Error] CreateAppointment: {ex.Message}");
+                Console.WriteLine($"[AppointmentService] CreateAppointment failed: {ex.Message}");
             }
             return null;
         }
 
         /// <summary>
-        /// Updates the status of an appointment.
+        /// Updates appointment status. Accepts: PENDING, CONFIRMED, COMPLETED, CANCELLED.
         /// </summary>
-        public bool UpdateStatus(string appointmentId, string status)
+        public bool UpdateStatus(int appointmentId, string status)
         {
             try
             {
@@ -86,77 +106,129 @@ namespace HospitalManagementSystem.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AppointmentService Error] UpdateStatus: {ex.Message}");
+                Console.WriteLine($"[AppointmentService] UpdateStatus failed: {ex.Message}");
                 return false;
             }
         }
 
+        // ─── Medical Records ────────────────────────────────────────────────────────
+
         /// <summary>
-        /// Retrieves all clinical medical entries.
+        /// Returns all medical records using real schema columns.
         /// </summary>
         public List<dynamic> GetAllMedicalRecords()
         {
-            var records = new List<dynamic>();
+            var list = new List<dynamic>();
             try
             {
                 DataTable dt = _appointmentRepository.FetchAllMedicalRecords();
                 foreach (DataRow row in dt.Rows)
-                {
-                    records.Add(new
-                    {
-                        id = row["id"].ToString(),
-                        patientId = row["patient_id"].ToString(),
-                        patientName = row["patient_name"].ToString(),
-                        doctorId = row["doctor_id"].ToString(),
-                        doctorName = row["doctor_name"].ToString(),
-                        visitDate = Convert.ToDateTime(row["visit_date"]).ToString("yyyy-MM-dd"),
-                        symptoms = row["symptoms"].ToString(),
-                        diagnosis = row["diagnosis"].ToString(),
-                        treatmentPlan = row["treatment_plan"].ToString(),
-                        internalNotes = row["internal_notes"] != DBNull.Value ? row["internal_notes"].ToString() : "",
-                        signedBy = row["signed_by"].ToString()
-                    });
-                }
+                    list.Add(MapRecordRow(row));
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AppointmentService Error] GetAllMedicalRecords: {ex.Message}");
+                Console.WriteLine($"[AppointmentService] GetAllMedicalRecords failed: {ex.Message}");
             }
-            return records;
+            return list;
         }
 
         /// <summary>
-        /// Creates a new signed medical consultation record.
+        /// Returns medical records for a specific doctor.
         /// </summary>
-        public dynamic CreateMedicalRecord(string patientId, string doctorId, string date, string symptoms, string diagnosis, string plan, string notes, string signedBy)
+        public List<dynamic> GetMedicalRecordsByDoctor(int doctorId)
+        {
+            var list = new List<dynamic>();
+            try
+            {
+                DataTable dt = _appointmentRepository.FetchMedicalRecordsByDoctorId(doctorId);
+                foreach (DataRow row in dt.Rows)
+                    list.Add(MapRecordRow(row));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AppointmentService] GetMedicalRecordsByDoctor failed: {ex.Message}");
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Returns medical records for a specific patient.
+        /// </summary>
+        public List<dynamic> GetMedicalRecordsByPatient(int patientId)
+        {
+            var list = new List<dynamic>();
+            try
+            {
+                DataTable dt = _appointmentRepository.FetchMedicalRecordsByPatientId(patientId);
+                foreach (DataRow row in dt.Rows)
+                    list.Add(MapRecordRow(row));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AppointmentService] GetMedicalRecordsByPatient failed: {ex.Message}");
+            }
+            return list;
+        }
+
+        /// <summary>
+        /// Creates a new medical record with real schema columns: diagnosis + prescription.
+        /// </summary>
+        public dynamic CreateMedicalRecord(int patientId, int doctorId, string diagnosis, string prescription, string date)
         {
             try
             {
-                string id = "MR-" + new Random().Next(1000, 9999).ToString();
-                DateTime visitDate = DateTime.TryParse(date, out var parsedDate) ? visitDate = parsedDate : visitDate = DateTime.Today;
+                DateTime visitDate = DateTime.TryParse(date, out var parsed) ? parsed : DateTime.Today;
+                int newId = _appointmentRepository.InsertMedicalRecord(patientId, doctorId, diagnosis, prescription, visitDate);
 
-                bool success = _appointmentRepository.InsertMedicalRecord(id, patientId, doctorId, visitDate, symptoms, diagnosis, plan, notes, signedBy);
-                if (success)
+                if (newId > 0)
                 {
                     return new
                     {
-                        id = id,
-                        patientId = patientId,
-                        doctorId = doctorId,
-                        visitDate = visitDate.ToString("yyyy-MM-dd"),
-                        symptoms = symptoms,
-                        diagnosis = diagnosis,
-                        treatmentPlan = plan,
-                        internalNotes = notes,
-                        signedBy = signedBy
+                        id           = newId,
+                        patientId    = patientId,
+                        doctorId     = doctorId,
+                        diagnosis    = diagnosis,
+                        prescription = prescription,
+                        visitDate    = visitDate.ToString("yyyy-MM-dd")
                     };
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[C# AppointmentService Error] CreateMedicalRecord: {ex.Message}");
+                Console.WriteLine($"[AppointmentService] CreateMedicalRecord failed: {ex.Message}");
             }
             return null;
+        }
+
+        // ─── Helpers ────────────────────────────────────────────────────────────────
+
+        private static dynamic MapAppointmentRow(DataRow row)
+        {
+            return new
+            {
+                id              = Convert.ToInt32(row["id"]),
+                patientId       = Convert.ToInt32(row["patient_id"]),
+                patientName     = row["patient_name"].ToString(),
+                doctorId        = Convert.ToInt32(row["doctor_id"]),
+                doctorName      = row["doctor_name"].ToString(),
+                appointmentDate = Convert.ToDateTime(row["appointment_date"]).ToString("yyyy-MM-dd"),
+                status          = row["status"].ToString()
+            };
+        }
+
+        private static dynamic MapRecordRow(DataRow row)
+        {
+            return new
+            {
+                id           = Convert.ToInt32(row["id"]),
+                patientId    = Convert.ToInt32(row["patient_id"]),
+                patientName  = row["patient_name"].ToString(),
+                doctorId     = Convert.ToInt32(row["doctor_id"]),
+                doctorName   = row["doctor_name"].ToString(),
+                diagnosis    = row["diagnosis"] != DBNull.Value ? row["diagnosis"].ToString() : "",
+                prescription = row["prescription"] != DBNull.Value ? row["prescription"].ToString() : "",
+                visitDate    = Convert.ToDateTime(row["visit_date"]).ToString("yyyy-MM-dd")
+            };
         }
     }
 }
