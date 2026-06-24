@@ -244,31 +244,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
               </div>
             </div>
 
-            {/* Recent alarms / alerts (1/3) */}
-            <div className="space-y-4">
-              <h4 className="font-bold text-slate-950 dark:text-white text-base">Critical Patient Alarms</h4>
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4 h-[350px]">
-                <div className="flex gap-4 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-950/40 rounded-xl items-start">
-                  <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-                  <div>
-                    <h5 className="text-xs font-bold text-red-800 dark:text-red-400 uppercase">Critical Allergy Alert</h5>
-                    <p className="text-xs text-red-700 dark:text-red-300 font-medium mt-1">
-                      Patient Eleanor Mitchell (#PT-8821) reports severe Penicillin hypersensitivity. Extreme caution advised.
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex gap-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-950/40 rounded-xl items-start">
-                  <Activity className="w-5 h-5 text-amber-600 shrink-0" />
-                  <div>
-                    <h5 className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase">Vitals Threshold Alert</h5>
-                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium mt-1">
-                      James Wilson (#PT-8822) indicates elevated systolic blood pressure readings (145/95 mmHg).
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </>
       )}

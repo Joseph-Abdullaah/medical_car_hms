@@ -293,49 +293,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection, setActi
               </div>
             </div>
 
-            {/* Activities Timeline */}
-            <div className="col-span-12 lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
-              <h4 className="font-bold text-slate-950 dark:text-white text-base mb-6">
-                Active Hospital Logs
-              </h4>
-              <div className="space-y-6 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
-                <div className="flex gap-4 relative">
-                  <div className="w-7 h-7 bg-emerald-100 dark:bg-emerald-950/20 text-emerald-600 rounded-full flex items-center justify-center shrink-0 z-10 text-xs font-bold">
-                    1
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-900 dark:text-white font-semibold">
-                      New patient registration completed
-                    </p>
-                    <p className="text-[10px] text-slate-400">Just now</p>
-                  </div>
-                </div>
 
-                <div className="flex gap-4 relative">
-                  <div className="w-7 h-7 bg-blue-100 dark:bg-blue-950/20 text-blue-600 rounded-full flex items-center justify-center shrink-0 z-10 text-xs font-bold">
-                    2
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-900 dark:text-white font-semibold">
-                      Appointment booked with Cardiology
-                    </p>
-                    <p className="text-[10px] text-slate-400">45 minutes ago</p>
-                  </div>
-                </div>
-
-                <div className="flex gap-4 relative">
-                  <div className="w-7 h-7 bg-purple-100 dark:bg-purple-900/20 text-purple-600 rounded-full flex items-center justify-center shrink-0 z-10 text-xs font-bold">
-                    3
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-900 dark:text-white font-semibold">
-                      Dr. Smith finalized patient record
-                    </p>
-                    <p className="text-[10px] text-slate-400">2 hours ago</p>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </>
       )}
