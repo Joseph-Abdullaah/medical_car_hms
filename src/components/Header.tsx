@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Settings, HelpCircle, Search, User, Menu } from "lucide-react";
+import { User, Menu } from "lucide-react";
 import { User as UserType } from "../services/bridge";
 
 interface HeaderProps {
