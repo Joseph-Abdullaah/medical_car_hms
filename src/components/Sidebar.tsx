@@ -1,16 +1,16 @@
 import React from "react";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Stethoscope, 
-  CalendarDays, 
-  FileText, 
-  HelpCircle, 
-  LogOut, 
-  CheckSquare, 
-  UserSquare, 
-  CalendarPlus, 
-  History
+import {
+  LayoutDashboard,
+  Users,
+  Stethoscope,
+  CalendarDays,
+  FileText,
+  HelpCircle,
+  LogOut,
+  UserSquare,
+  CalendarPlus,
+  History,
+  Layers
 } from "lucide-react";
 import { User } from "../services/bridge";
 
@@ -126,6 +126,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <CalendarDays className="w-5 h-5" />
                 <span>Appointments</span>
+              </button>
+              <button
+                onClick={() => handleNavClick("departments")}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  activeSection === "departments"
+                    ? "bg-blue-600 text-white shadow-sm font-semibold"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950"
+                }`}
+              >
+                <Layers className="w-5 h-5" />
+                <span>Departments</span>
               </button>
             </>
           )}
