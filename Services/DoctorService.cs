@@ -40,8 +40,7 @@ namespace HospitalManagementSystem.Services
                 if (_userRepository.UserExists(username))
                     return null; // Username taken
 
-                string passwordHash = HashPassword(password);
-                int userId = _userRepository.CreateUser(username, passwordHash, "DOCTOR");
+                int userId = _userRepository.CreateUser(username, password, "DOCTOR");
 
                 if (userId <= 0)
                     return null;
@@ -91,14 +90,5 @@ namespace HospitalManagementSystem.Services
             };
         }
 
-        private static string HashPassword(string password)
-        {
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-            {
-                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(password);
-                byte[] hash  = sha.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", "").ToLower();
-            }
-        }
     }
 }
