@@ -28,9 +28,9 @@ namespace HospitalManagementSystem.Repositories
                         u.username   AS username,
                         pp.full_name AS full_name,
                         pp.blood_type AS blood_type,
-                        pp.gender    AS gender,
-                        pp.phone     AS phone,
-                        pp.address   AS address
+                        pp.phone AS phone,
+                        pp.address AS address,
+                        pp.gender AS gender
                     FROM Users u
                     INNER JOIN Patient_Profiles pp ON u.user_id = pp.user_id
                     WHERE u.role = 'PATIENT'
@@ -60,9 +60,9 @@ namespace HospitalManagementSystem.Repositories
                         u.username   AS username,
                         pp.full_name AS full_name,
                         pp.blood_type AS blood_type,
-                        pp.gender    AS gender,
-                        pp.phone     AS phone,
-                        pp.address   AS address
+                        pp.phone AS phone,
+                        pp.address AS address,
+                        pp.gender AS gender
                     FROM Users u
                     INNER JOIN Patient_Profiles pp ON u.user_id = pp.user_id
                     WHERE u.user_id = @uid AND u.role = 'PATIENT'";
@@ -81,7 +81,7 @@ namespace HospitalManagementSystem.Repositories
         }
 
         /// <summary>
-        /// Updates a patient's profile fields (the fields that exist in Patient_Profiles).
+        /// Updates a patient's profile fields (all Patient_Profiles columns).
         /// </summary>
         public bool UpdateProfile(int userId, string fullName, string bloodType, string gender, string phone, string address)
         {
@@ -99,12 +99,12 @@ namespace HospitalManagementSystem.Repositories
 
                 using (var cmd = new MySqlCommand(query, conn))
                 {
-                    cmd.Parameters.AddWithValue("@uid",    userId);
-                    cmd.Parameters.AddWithValue("@name",   fullName ?? (object)DBNull.Value);
-                    cmd.Parameters.AddWithValue("@blood",  bloodType ?? (object)DBNull.Value);
-                    cmd.Parameters.AddWithValue("@gender", gender ?? (object)DBNull.Value);
-                    cmd.Parameters.AddWithValue("@phone",  phone ?? (object)DBNull.Value);
-                    cmd.Parameters.AddWithValue("@address",address ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@uid",     userId);
+                    cmd.Parameters.AddWithValue("@name",    fullName  ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@blood",   bloodType ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@gender",  gender    ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@phone",   phone     ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@address", address   ?? (object)DBNull.Value);
 
                     return cmd.ExecuteNonQuery() > 0;
                 }
@@ -112,3 +112,4 @@ namespace HospitalManagementSystem.Repositories
         }
     }
 }
+
