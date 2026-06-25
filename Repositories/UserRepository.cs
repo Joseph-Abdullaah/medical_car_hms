@@ -17,7 +17,7 @@ namespace HospitalManagementSystem.Repositories
         /// Validates login credentials. JOINs profile table to retrieve full_name.
         /// Returns the user row or an empty DataTable on failure.
         /// </summary>
-        public DataTable GetUserByCredentials(string username, string passwordHash)
+        public DataTable GetUserByCredentials(string username, string password)
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
@@ -34,20 +34,23 @@ namespace HospitalManagementSystem.Repositories
                     LEFT JOIN Patient_Profiles pp ON u.user_id = pp.user_id AND u.role = 'PATIENT'
                     LEFT JOIN Doctor_Profiles  dp ON u.user_id = dp.user_id AND u.role = 'DOCTOR'
                     WHERE u.username = @user
-                      AND u.password_hash = @pass";
+                      AND u.password = @pass";
+
 
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@user", username);
-                    cmd.Parameters.AddWithValue("@pass", passwordHash);
+                    cmd.Parameters.AddWithValue("@pass", password);
 
                     using (var adapter = new MySqlDataAdapter(cmd))
+
                     {
                         var dt = new DataTable();
                         adapter.Fill(dt);
                         return dt;
                     }
                 }
+
             }
         }
 
@@ -73,18 +76,21 @@ namespace HospitalManagementSystem.Repositories
         /// <summary>
         /// Inserts a new row into Users. Returns the new user_id.
         /// </summary>
-        public int CreateUser(string username, string passwordHash, string role)
+        public int CreateUser(string username, string password, string role)
+
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "INSERT INTO Users (username, password_hash, role) VALUES (@user, @pass, @role); SELECT LAST_INSERT_ID();";
+                string query = "INSERT INTO Users (username, password, role) VALUES (@user, @pass, @role); SELECT LAST_INSERT_ID();";
+
 
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@user", username);
-                    cmd.Parameters.AddWithValue("@pass", passwordHash);
+                    cmd.Parameters.AddWithValue("@pass", password);
                     cmd.Parameters.AddWithValue("@role", role);
+
 
                     return Convert.ToInt32(cmd.ExecuteScalar());
                 }
@@ -94,17 +100,21 @@ namespace HospitalManagementSystem.Repositories
         /// <summary>
         /// Inserts a Patient_Profiles row linked to a Users row.
         /// </summary>
-        public bool CreatePatientProfile(int userId, string fullName)
+        public bool CreatePatientProfile(int userId, string fullName, string bloodType, string gender, string phone, string address)
         {
             using (var conn = new MySqlConnection(_connectionString))
             {
                 conn.Open();
-                string query = "INSERT INTO Patient_Profiles (user_id, full_name) VALUES (@uid, @name)";
+                string query = "INSERT INTO Patient_Profiles (user_id, full_name, blood_type, gender, phone, address) VALUES (@uid, @name, @blood, @gender, @phone, @address)";
 
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@uid", userId);
-                    cmd.Parameters.AddWithValue("@name", fullName);
+                    cmd.Parameters.AddWithValue("@name", fullName ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@blood", bloodType ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@gender", gender ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@phone", phone ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@address", address ?? (object)DBNull.Value);
 
                     return cmd.ExecuteNonQuery() > 0;
                 }
@@ -124,7 +134,7 @@ namespace HospitalManagementSystem.Repositories
                 using (var cmd = new MySqlCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@uid", userId);
-                    cmd.Parameters.AddWithValue("@name", fullName);
+                    cmd.Parameters.AddWithValue("@name", fullName ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@dept", deptId);
 
                     return cmd.ExecuteNonQuery() > 0;

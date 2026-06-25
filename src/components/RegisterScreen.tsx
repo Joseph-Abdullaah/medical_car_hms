@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { UserPlus, Mail, Lock, Eye, EyeOff, ShieldCheck, Stethoscope, UserCheck, ArrowRight, User } from "lucide-react";
+import {
+  UserPlus,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  User,
+} from "lucide-react";
 import { Bridge, User as UserType } from "../services/bridge";
 
 interface RegisterScreenProps {
@@ -7,11 +14,19 @@ interface RegisterScreenProps {
   onNavigateToLogin: () => void;
 }
 
-export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSuccess, onNavigateToLogin }) => {
-  const [role, setRole] = useState<"admin" | "doctor" | "patient">("patient");
+export const RegisterScreen: React.FC<RegisterScreenProps> = ({
+  onRegisterSuccess,
+  onNavigateToLogin,
+}) => {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [bloodType, setBloodType] = useState("");
+  const [gender, setGender] = useState<"Male" | "Female">("Male");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  // schema: Patient_Profiles does NOT include emergency contact; handled via phone only
+  // emergencyContact removed per schema.
+
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,8 +36,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !username || !email || !password || !confirmPassword) {
+    if (!fullName || !username || !password || !confirmPassword) {
       setError("Please fill in all requested fields.");
+      return;
+    }
+
+    if (!bloodType || !gender || !phone || !address) {
+      setError("Please fill in all required patient profile fields.");
       return;
     }
 
@@ -40,10 +60,22 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
       setLoading(true);
       setError("");
 
-      const user = await Bridge.register(fullName, username, email, password, role);
+      const user = await Bridge.register(
+        fullName,
+        username,
+        password,
+        bloodType,
+        gender,
+        phone,
+        address,
+      );
+
       onRegisterSuccess(user);
     } catch (err: any) {
-      setError(err.message || "Registration failed. Try checking username/email availability.");
+      setError(
+        err.message ||
+          "Registration failed. Try checking username/email availability.",
+      );
     } finally {
       setLoading(false);
     }
@@ -67,57 +99,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
 
         {/* Card Component */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 shadow-md">
-          
-          {/* Role selection */}
-          <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-              Select Your Role
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {/* Patient */}
-              <button
-                type="button"
-                onClick={() => setRole("patient")}
-                className={`flex flex-col items-center justify-center p-3 border rounded-xl transition-all group ${
-                  role === "patient"
-                    ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 font-semibold"
-                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700"
-                }`}
-              >
-                <UserCheck className={`w-6 h-6 mb-2 ${role === "patient" ? "text-blue-600" : "text-slate-400 group-hover:text-blue-600"}`} />
-                <span className="text-[11px] uppercase tracking-wider font-semibold">Patient</span>
-              </button>
-
-              {/* Doctor */}
-              <button
-                type="button"
-                onClick={() => setRole("doctor")}
-                className={`flex flex-col items-center justify-center p-3 border rounded-xl transition-all group ${
-                  role === "doctor"
-                    ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 font-semibold"
-                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700"
-                }`}
-              >
-                <Stethoscope className={`w-6 h-6 mb-2 ${role === "doctor" ? "text-blue-600" : "text-slate-400 group-hover:text-blue-600"}`} />
-                <span className="text-[11px] uppercase tracking-wider font-semibold">Doctor</span>
-              </button>
-
-              {/* Admin */}
-              <button
-                type="button"
-                onClick={() => setRole("admin")}
-                className={`flex flex-col items-center justify-center p-3 border rounded-xl transition-all group ${
-                  role === "admin"
-                    ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 font-semibold"
-                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700"
-                }`}
-              >
-                <ShieldCheck className={`w-6 h-6 mb-2 ${role === "admin" ? "text-blue-600" : "text-slate-400 group-hover:text-blue-600"}`} />
-                <span className="text-[11px] uppercase tracking-wider font-semibold">Admin</span>
-              </button>
-            </div>
-          </div>
-
           {/* Form */}
           <form className="space-y-4" onSubmit={handleSubmit}>
             {error && (
@@ -128,7 +109,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
 
             {/* Display Full Name */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="fullName">
+              <label
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                htmlFor="fullName"
+              >
                 Full Name
               </label>
               <div className="relative">
@@ -144,31 +128,104 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
               </div>
             </div>
 
-            {/* Username & Email row */}
+            {/* Username */}
+            <div className="space-y-1">
+              <label
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                htmlFor="username"
+              >
+                Username
+              </label>
+              <input
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="johndoe88"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 transition-all"
+              />
+            </div>
+
+            {/* Blood Type (dropdown) + Gender (male/female) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="username">
-                  Username
+                <label
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  htmlFor="bloodType"
+                >
+                  Blood Type
+                </label>
+                <select
+                  id="bloodType"
+                  value={bloodType}
+                  onChange={(e) => setBloodType(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none text-slate-900 dark:text-white"
+                >
+                  <option value="">Select blood type...</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  htmlFor="gender"
+                >
+                  Gender
+                </label>
+                <select
+                  id="gender"
+                  value={gender}
+                  onChange={(e) =>
+                    setGender(e.target.value as "Male" | "Female")
+                  }
+                  className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none text-slate-900 dark:text-white"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Phone & Address */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  htmlFor="phone"
+                >
+                  Phone
                 </label>
                 <input
                   type="text"
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="johndoe88"
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Phone"
                   className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 transition-all"
                 />
               </div>
+
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="email">
-                  Email Address
+                <label
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  htmlFor="address"
+                >
+                  Address
                 </label>
                 <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="john@example.com"
+                  type="text"
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Address"
                   className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-600 focus:border-blue-600 outline-none text-slate-900 dark:text-white placeholder:text-slate-400 transition-all"
                 />
               </div>
@@ -176,7 +233,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
 
             {/* Password */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="password">
+              <label
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                htmlFor="password"
+              >
                 Password
               </label>
               <div className="relative">
@@ -194,14 +254,21 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
 
             {/* Confirm Password */}
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300" htmlFor="confirm_password">
+              <label
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                htmlFor="confirm_password"
+              >
                 Confirm Password
               </label>
               <div className="relative">
@@ -226,7 +293,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegisterSucces
                 onChange={(e) => setTerms(e.target.checked)}
                 className="mt-1 h-4.5 w-4.5 rounded border-slate-200 dark:border-slate-800 text-blue-600 focus:ring-blue-500/20 cursor-pointer"
               />
-              <label className="text-xs text-slate-500 dark:text-slate-400 leading-snug cursor-pointer" htmlFor="terms">
+              <label
+                className="text-xs text-slate-500 dark:text-slate-400 leading-snug cursor-pointer"
+                htmlFor="terms"
+              >
                 By creating an account, I agree to the{" "}
                 <a href="#" className="text-blue-600 hover:underline">
                   Terms of Service

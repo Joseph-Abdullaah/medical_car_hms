@@ -17,20 +17,17 @@ namespace HospitalManagementSystem.Services
         {
             try
             {
-                // Hash the incoming password the same way we stored it
-                string passwordPlain = password;
-
-                DataTable dt = _userRepository.GetUserByCredentials(username, passwordHash);
+                DataTable dt = _userRepository.GetUserByCredentials(username, password);
 
                 if (dt.Rows.Count > 0)
                 {
                     DataRow row = dt.Rows[0];
                     return new
                     {
-                        id       = Convert.ToInt32(row["id"]),
+                        id = Convert.ToInt32(row["id"]),
                         username = row["username"].ToString(),
                         fullName = row["full_name"].ToString(),
-                        role     = row["role"].ToString().ToLower()   // Return lowercase to match React expectations
+                        role = row["role"].ToString().ToLower() // Return lowercase to match React expectations
                     };
                 }
             }
@@ -38,61 +35,59 @@ namespace HospitalManagementSystem.Services
             {
                 Console.WriteLine($"[AuthService] ValidateCredentials failed: {ex.Message}");
             }
+
             return null;
         }
 
         /// <summary>
-        /// Registers a new PATIENT. Only PATIENT registration is allowed here.
-        /// Creates a Users row + a Patient_Profiles row in one atomic flow.
+        /// Registers a new PATIENT.
+        /// Creates a Users row + a Patient_Profiles row.
         /// </summary>
-        public dynamic RegisterUser(string fullName, string username, string password)
+        public dynamic RegisterUser(
+            string fullName,
+            string username,
+            string password,
+            string bloodType,
+            string gender,
+            string phone,
+            string address)
         {
             try
             {
                 if (_userRepository.UserExists(username))
-                {
-                    return null; // Username already taken
-                }
+                    return new { ok = false, message = "Username already exists." };
 
-                string passwordPlain = password;
-
-                // 1. Insert into Users with role = PATIENT
-                int userId = _userRepository.CreateUser(username, passwordHash, "PATIENT");
-
+                // 1) Insert into Users
+                int userId = _userRepository.CreateUser(username, password, "PATIENT");
                 if (userId <= 0)
-                {
-                    return null;
-                }
+                    return new { ok = false, message = "Failed to create user." };
 
-                // 2. Insert into Patient_Profiles
-                _userRepository.CreatePatientProfile(userId, fullName);
+                // 2) Insert into Patient_Profiles
+                bool profileOk = _userRepository.CreatePatientProfile(
+                    userId,
+                    fullName,
+                    bloodType,
+                    gender,
+                    phone,
+                    address);
+
+                if (!profileOk)
+                    return new { ok = false, message = "Failed to create patient profile." };
 
                 return new
                 {
-                    id       = userId,
+                    id = userId,
                     username = username,
                     fullName = fullName,
-                    role     = "patient"
+                    role = "patient"
                 };
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[AuthService] RegisterUser failed: {ex.Message}");
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Simple SHA-256 password hashing. In production use BCrypt.
-        /// </summary>
-        private static string HashPassword(string password)
-        {
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-            {
-                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(password);
-                byte[] hash  = sha.ComputeHash(bytes);
-                return BitConverter.ToString(hash).Replace("-", "").ToLower();
+                return new { ok = false, message = "Registration failed due to server error." };
             }
         }
     }
 }
+
