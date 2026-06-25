@@ -1,26 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Users, 
-  Stethoscope, 
-  CalendarDays, 
-  FileText, 
-  Search, 
-  Plus, 
-  ChevronRight, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  Activity, 
-  BookOpen, 
-  Brain, 
-  Smile, 
-  Calendar,
-  AlertTriangle,
-  User,
+import {
+  Users,
+  CalendarDays,
+  FileText,
+  Plus,
+  ChevronRight,
+  CheckCircle,
+  XCircle,
   Check,
   Printer,
   Share2,
-  FileCheck
+  FileCheck,
 } from "lucide-react";
 import { Bridge, User as UserType, Patient, Appointment, MedicalRecord } from "../services/bridge";
 
@@ -30,36 +20,30 @@ interface DoctorPortalProps {
 }
 
 export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection }) => {
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients,     setPatients]     = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [records,      setRecords]      = useState<MedicalRecord[]>([]);
 
-  // Selected details state
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-  const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
+  const [selectedRecord,  setSelectedRecord]  = useState<MedicalRecord | null>(null);
+  const [selectedAppt,    setSelectedAppt]    = useState<Appointment | null>(null);
 
-  // Modals state
-  const [showPatientModal, setShowPatientModal] = useState(false);
-  const [showRecordModal, setShowRecordModal] = useState(false);
-  const [showAddRecordModal, setShowAddRecordModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showPatientModal,    setShowPatientModal]    = useState(false);
+  const [showRecordModal,     setShowRecordModal]     = useState(false);
+  const [showAddRecordModal,  setShowAddRecordModal]  = useState(false);
+  const [showStatusModal,     setShowStatusModal]     = useState(false);
 
-  // New record parameters
+  // Add Record form — only schema fields: diagnosis + prescription
   const [newRecord, setNewRecord] = useState({
     patientId: "",
     visitDate: new Date().toISOString().split("T")[0],
-    symptoms: "",
     diagnosis: "",
-    treatmentPlan: "",
-    internalNotes: ""
+    prescription: "",
   });
 
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
@@ -67,515 +51,401 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
       const [patList, apptList, recList] = await Promise.all([
         Bridge.getPatients(),
         Bridge.getAppointments(),
-        Bridge.getMedicalRecords()
+        Bridge.getMedicalRecords(),
       ]);
       setPatients(patList);
       setAppointments(apptList);
       setRecords(recList);
     } catch (err) {
-      console.error(err);
+      console.error("DoctorPortal fetchData failed:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateStatus = async (id: string, state: "Approved" | "Completed" | "Cancelled") => {
-    try {
-      await Bridge.updateAppointmentStatus(id, state);
-      setShowStatusModal(false);
-      setSelectedAppt(null);
-      fetchData();
-    } catch (err) {
-      console.error(err);
+  // ── Filtered data for this doctor only ───────────────────────────────────────
+  const doctorId = String(user.id);
+
+  const docAppointments = appointments.filter(a => String(a.doctorId) === doctorId);
+  const docRecords      = records.filter(r => String(r.doctorId) === doctorId);
+
+  // Patients who have at least one appointment with this doctor
+  const docPatientIds = new Set(docAppointments.map(a => String(a.patientId)));
+  const docPatients   = patients.filter(p => docPatientIds.has(String(p.id)));
+
+  // ── Status badge ─────────────────────────────────────────────────────────────
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case "CONFIRMED":  return "bg-teal-100 text-teal-700";
+      case "COMPLETED":  return "bg-emerald-100 text-emerald-700";
+      case "CANCELLED":  return "bg-red-100 text-red-700";
+      default:           return "bg-amber-100 text-amber-700"; // PENDING
     }
   };
 
-  const handleAddRecordSubmit = async (e: React.FormEvent) => {
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleUpdateStatus = async (id: string, status: "CONFIRMED" | "COMPLETED" | "CANCELLED") => {
+    try {
+      await Bridge.updateAppointmentStatus(id, status);
+      setShowStatusModal(false);
+      setSelectedAppt(null);
+      fetchData();
+    } catch (err) { console.error(err); }
+  };
+
+  const handleAddRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRecord.patientId || !newRecord.symptoms || !newRecord.diagnosis || !newRecord.treatmentPlan) {
-      alert("Please fill in all clinical required items.");
+    if (!newRecord.patientId || !newRecord.diagnosis || !newRecord.prescription) {
+      alert("Patient, diagnosis and prescription are required.");
       return;
     }
     try {
       await Bridge.addMedicalRecord({
-        ...newRecord,
-        doctorId: "DR-8821",
-        signedBy: user.fullName
+        patientId:    newRecord.patientId,
+        doctorId:     doctorId,
+        diagnosis:    newRecord.diagnosis,
+        prescription: newRecord.prescription,
+        visitDate:    newRecord.visitDate,
       });
       setShowAddRecordModal(false);
-      setNewRecord({
-        patientId: "",
-        visitDate: new Date().toISOString().split("T")[0],
-        symptoms: "",
-        diagnosis: "",
-        treatmentPlan: "",
-        internalNotes: ""
-      });
+      setNewRecord({ patientId: "", visitDate: new Date().toISOString().split("T")[0], diagnosis: "", prescription: "" });
       fetchData();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
-  // Filter lists specifically for Doctor Portal
-  // In the real system, doctors are assigned to active appointments
-  const docAppointments = appointments.filter(a => a.doctorId === "DR-8821" || a.doctorName.includes("Smith"));
-  const docRecords = records.filter(r => r.doctorId === "DR-8821" || r.signedBy.includes("Smith") || r.doctorName.includes("Smith"));
+  const inputCls = "w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm outline-none focus:ring-1 focus:ring-blue-600";
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
-      
-      {/* SECTION 1: DASHBOARD */}
+
+      {/* ── DASHBOARD ── */}
       {activeSection === "dashboard" && (
         <>
-          {/* Welcome Intro */}
-          <div className="mb-6">
+          <div className="mb-2">
             <h3 className="text-2xl font-bold text-slate-950 dark:text-white">
-              Good morning, {user.fullName}
+              Good day, {user.fullName}
             </h3>
-            <p className="text-sm text-slate-500 font-medium">
-              You have {docAppointments.length} appointments scheduled.
+            <p className="text-sm text-slate-500 font-medium mt-1">
+              You have {docAppointments.length} appointment{docAppointments.length !== 1 ? "s" : ""} on record.
             </p>
           </div>
 
-          {/* Stats boxes */}
+          {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Total Patients */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:border-slate-350 transition-colors">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-xl">
                   <Users className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-1 rounded-full">
-                  +4% vs last mo
-                </span>
               </div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Total Patients</p>
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
-                {patients.length}
-              </h3>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">My Patients</p>
+              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{docPatients.length}</h3>
             </div>
 
-            {/* Today's Appointments */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:border-slate-350 transition-colors">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-teal-100 dark:bg-teal-900/30 text-teal-600 rounded-xl">
                   <CalendarDays className="w-5 h-5" />
                 </div>
-                <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full font-bold">
-                  Next slot: 10:30 AM
-                </span>
               </div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Today's Appointments</p>
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
-                {docAppointments.length}
-              </h3>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Appointments</p>
+              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{docAppointments.length}</h3>
             </div>
 
-            {/* Pending Medical Records */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:border-slate-350 transition-colors">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-xl">
                   <FileText className="w-5 h-5" />
                 </div>
-                <span className="text-xs text-red-600 bg-red-50 dark:bg-red-950/20 px-2.5 py-1 rounded-full font-bold">
-                  Action Required
-                </span>
               </div>
               <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Medical Records</p>
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
-                0{docRecords.length}
-              </h3>
+              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{docRecords.length}</h3>
             </div>
           </div>
 
-          {/* Table list row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-            {/* Appointments schedule (2/3) */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="flex justify-between items-center">
-                <h4 className="font-bold text-slate-950 dark:text-white text-base">Today's Appointments</h4>
-                {/* <button className="text-xs text-blue-600 font-semibold hover:underline">View Calendar</button> */}
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/10 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase text-slate-500">
-                      <th className="px-6 py-4">Patient Name</th>
-                      <th className="px-6 py-4">Time</th>
-                      <th className="px-6 py-4">Type/Reason</th>
-                      <th className="px-6 py-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {docAppointments.map(a => {
-                      const initials = a.patientName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0,2);
-                      return (
-                        <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-850/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs select-none">
-                                {initials}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-sm text-slate-900 dark:text-white leading-tight">{a.patientName}</p>
-                                <p className="text-[10px] text-slate-400 font-semibold">{a.patientId}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-semibold">{a.appointmentTime}</td>
-                          <td className="px-6 py-4 text-xs text-slate-500 font-medium max-w-[180px] truncate">{a.reason}</td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full ${
-                              a.status === "Completed" ? "bg-emerald-100 text-emerald-700" :
-                              a.status === "Approved" ? "bg-teal-100 text-teal-700" : "bg-amber-100 text-amber-700"
-                            }`}>
-                              {a.status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                </div>
-              </div>
+          {/* Recent appointments */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h4 className="font-bold text-slate-950 dark:text-white text-base">Recent Appointments</h4>
             </div>
-
-
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase text-slate-500">
+                    <th className="px-6 py-3">Patient</th>
+                    <th className="px-6 py-3">Date</th>
+                    <th className="px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {docAppointments.length === 0 ? (
+                    <tr><td colSpan={3} className="text-center py-8 text-sm text-slate-400 italic">No appointments yet.</td></tr>
+                  ) : docAppointments.slice(0, 5).map(a => {
+                    const initials = a.patientName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+                    return (
+                      <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs select-none">{initials}</div>
+                            <div>
+                              <p className="font-semibold text-sm text-slate-900 dark:text-white">{a.patientName}</p>
+                              <p className="text-[10px] text-slate-400 font-semibold">ID: {a.patientId}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">{a.appointmentDate}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full ${statusBadge(a.status)}`}>
+                            {a.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}
 
-      {/* SECTION 2: MY PATIENTS */}
+      {/* ── MY PATIENTS ── */}
       {activeSection === "patients" && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Assigned Patients</h3>
-              <p className="text-sm text-slate-500 font-medium">Click on any patient card to inspect history or diagnostic files.</p>
-            </div>
+          <div>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">My Patients</h3>
+            <p className="text-sm text-slate-500 font-medium">Patients who have appointments assigned to you.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {patients.map(p => {
-              const initials = p.fullName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
-              return (
-                <div 
-                  key={p.id}
-                  onClick={() => {
-                    setSelectedPatient(p);
-                    setShowPatientModal(true);
-                  }}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 hover:shadow-md cursor-pointer transition-all border-l-4 border-l-blue-600 hover:scale-[1.01]"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm select-none">
-                        {initials}
+          {docPatients.length === 0 ? (
+            <div className="text-center py-16 text-slate-400 italic text-sm">
+              No patients assigned yet. Patients appear here once an appointment is scheduled with you.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {docPatients.map(p => {
+                const initials = p.fullName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+                // Count records and appointments for this patient
+                const patAppts   = docAppointments.filter(a => String(a.patientId) === String(p.id));
+                const patRecords = docRecords.filter(r => String(r.patientId) === String(p.id));
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => { setSelectedPatient(p); setShowPatientModal(true); }}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 hover:shadow-md cursor-pointer transition-all border-l-4 border-l-blue-600 hover:scale-[1.01]"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm select-none">{initials}</div>
+                        <div>
+                          <h4 className="font-bold text-slate-950 dark:text-white text-base leading-tight">{p.fullName}</h4>
+                          <p className="text-xs text-slate-400 font-semibold">ID: {p.id}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-400" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs font-semibold pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <div>
+                        <p className="text-slate-400">Gender</p>
+                        <p className="text-slate-900 dark:text-white font-bold mt-0.5">{p.gender || "—"}</p>
                       </div>
                       <div>
-                        <h4 className="font-bold text-slate-950 dark:text-white text-base">{p.fullName}</h4>
-                        <p className="text-xs text-slate-400 font-semibold">{p.id}</p>
+                        <p className="text-slate-400">Blood Type</p>
+                        <p className="text-red-600 font-bold mt-0.5">{p.bloodType || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400">Appointments</p>
+                        <p className="text-slate-900 dark:text-white font-bold mt-0.5">{patAppts.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-400">Records</p>
+                        <p className="text-slate-900 dark:text-white font-bold mt-0.5">{patRecords.length}</p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-xs font-semibold py-3 border-t border-slate-100 dark:border-slate-850">
-                    <div>
-                      <p className="text-slate-400">Gender</p>
-                      <p className="text-slate-900 dark:text-white font-bold mt-0.5">{p.gender}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400">Blood Group</p>
-                      <p className="text-red-600 font-bold mt-0.5">{p.bloodGroup}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400">DOB</p>
-                      <p className="text-slate-900 dark:text-white mt-0.5">{p.dob}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400">Status</p>
-                      <p className="text-emerald-600 font-bold mt-0.5">{p.status}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* SECTION 3: APPOINTMENTS */}
+      {/* ── APPOINTMENTS ── */}
       {activeSection === "appointments" && (
         <div className="space-y-6">
           <div className="flex justify-between items-end">
             <div>
-              <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Appointments Hub</h3>
-              <p className="text-sm text-slate-500 font-medium">Track your schedule, view logs, and update visit status.</p>
+              <h3 className="text-2xl font-bold text-slate-950 dark:text-white">My Appointments</h3>
+              <p className="text-sm text-slate-500 font-medium">View and update the status of your scheduled visits.</p>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase text-slate-500">
-                  <th className="px-6 py-4">Appointment ID</th>
-                  <th className="px-6 py-4">Patient</th>
-                  <th className="px-6 py-4">Reserved Time</th>
-                  <th className="px-6 py-4">Department Unit</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {docAppointments.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-semibold text-blue-600">{a.id}</td>
-                    <td className="px-6 py-4 font-semibold text-sm text-slate-950 dark:text-white">{a.patientName}</td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-semibold text-slate-950 dark:text-white">{a.appointmentDate}</p>
-                      <p className="text-xs text-slate-400 font-semibold">{a.appointmentTime}</p>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500 font-medium">Neurology Center, Wing Level 4</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${
-                        a.status === "Approved" ? "bg-blue-100 text-blue-700" :
-                        a.status === "Completed" ? "bg-slate-100 text-slate-700" : "bg-red-100 text-red-700"
-                      }`}>
-                        {a.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedAppt(a);
-                          setShowStatusModal(true);
-                        }}
-                        className="p-1 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold"
-                      >
-                        Update Status
-                      </button>
-                    </td>
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase text-slate-500">
+                    <th className="px-6 py-4">ID</th>
+                    <th className="px-6 py-4">Patient</th>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {docAppointments.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-10 text-sm text-slate-400 italic">No appointments found.</td></tr>
+                  ) : docAppointments.map(a => (
+                    <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-6 py-4 text-sm font-semibold text-blue-600">{a.id}</td>
+                      <td className="px-6 py-4 font-semibold text-sm text-slate-950 dark:text-white">{a.patientName}</td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300">{a.appointmentDate}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${statusBadge(a.status)}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {a.status !== "COMPLETED" && a.status !== "CANCELLED" && (
+                          <button
+                            onClick={() => { setSelectedAppt(a); setShowStatusModal(true); }}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                          >
+                            Update Status
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      {/* SECTION 4: MEDICAL RECORDS */}
+      {/* ── MEDICAL RECORDS ── */}
       {activeSection === "records" && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Patient History & Registries</h3>
-              <p className="text-sm text-slate-500 font-medium font-semibold">Review, add, or download certified clinician summaries.</p>
+              <h3 className="text-2xl font-bold text-slate-950 dark:text-white">Medical Records</h3>
+              <p className="text-sm text-slate-500 font-medium">Create and review clinical records for your patients.</p>
             </div>
             <button
               onClick={() => setShowAddRecordModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
             >
               <Plus className="w-5 h-5" />
-              <span>Add Medical Record</span>
+              <span>Add Record</span>
             </button>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase text-slate-500">
-                  <th className="px-6 py-4">Record ID</th>
-                  <th className="px-6 py-4">Patient Name</th>
-                  <th className="px-6 py-4">Last Visit</th>
-                  <th className="px-6 py-4">Diagnosis</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {docRecords.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-5/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-500 font-mono">{r.id}</td>
-                    <td className="px-6 py-4 font-semibold text-sm text-slate-900 dark:text-white">{r.patientName}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{r.visitDate}</td>
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
-                        {r.diagnosis}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => {
-                          setSelectedRecord(r);
-                          setShowRecordModal(true);
-                        }}
-                        className="p-1 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-semibold mr-2"
-                      >
-                        View Record
-                      </button>
-                    </td>
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase text-slate-500">
+                    <th className="px-6 py-4">Record ID</th>
+                    <th className="px-6 py-4">Patient</th>
+                    <th className="px-6 py-4">Visit Date</th>
+                    <th className="px-6 py-4">Diagnosis</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {docRecords.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-10 text-sm text-slate-400 italic">No records yet. Create one using the button above.</td></tr>
+                  ) : docRecords.map(r => (
+                    <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-500 font-mono">{r.id}</td>
+                      <td className="px-6 py-4 font-semibold text-sm text-slate-900 dark:text-white">{r.patientName}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{r.visitDate}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                          {r.diagnosis}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => { setSelectedRecord(r); setShowRecordModal(true); }}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          View Record
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      {/* DETAIL MODAL: PATIENT */}
+      {/* ══ MODALS ══════════════════════════════════════════════════════════════ */}
+
+      {/* PATIENT DETAIL MODAL */}
       {showPatientModal && selectedPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-xl border border-slate-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">
-                  {selectedPatient.fullName.split(" ").map(n => n[0]).join("")}
+                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg select-none">
+                  {selectedPatient.fullName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2)}
                 </div>
                 <div>
                   <h3 className="font-bold text-xl text-slate-950 dark:text-white">{selectedPatient.fullName}</h3>
-                  <p className="text-xs text-slate-400">ID: {selectedPatient.id} • Registered since {selectedPatient.regDate}</p>
+                  <p className="text-xs text-slate-400 font-semibold">User ID: {selectedPatient.id}</p>
                 </div>
               </div>
-              <button onClick={() => setShowPatientModal(false)} className="text-slate-400 hover:text-slate-700">×</button>
-            </div>
-            
-            {/* Bento details columns */}
-            <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-              <div className="md:col-span-4 bg-slate-50 dark:bg-slate-950 p-6 rounded-xl border border-slate-150">
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4">Personal Info</h4>
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="text-xs text-slate-400 block uppercase font-semibold">Gender</span>
-                    <span className="font-semibold">{selectedPatient.gender}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 block uppercase font-semibold">Date of birth</span>
-                    <span className="font-semibold">{selectedPatient.dob}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 block uppercase font-semibold">Blood group</span>
-                    <span className="font-bold text-red-600">{selectedPatient.bloodGroup}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 block uppercase font-semibold">Phone</span>
-                    <span className="font-semibold">{selectedPatient.phone}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 block uppercase font-semibold">Emergency emergencyContact</span>
-                    <span className="font-semibold block">{selectedPatient.emergencyContactName}</span>
-                    <span className="text-xs text-slate-400">{selectedPatient.emergencyContactPhone}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Patient diagnoses */}
-              <div className="md:col-span-8 space-y-4">
-                <div className="p-6 bg-slate-50 dark:bg-slate-950 border rounded-xl">
-                  <h4 className="font-semibold text-sm mb-3">Diagnoses History</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="px-3 py-1 bg-teal-100 text-teal-800 text-xs font-bold rounded-full">Diabetes Type 2</span>
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full">Hypertension</span>
-                  </div>
-                </div>
-
-                <div className="p-6 bg-red-50 border border-red-200 rounded-xl flex gap-3 text-red-800">
-                  <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                  <div>
-                    <h5 className="text-xs font-extrabold uppercase">Critical alert messages</h5>
-                    <p className="text-xs font-semibold mt-1">Known severe allergy response to Penicillin tablets or infusions.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DETAIL MODAL: MEDICAL RECORD SUMMARY */}
-      {showRecordModal && selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-            <div className="p-4 border-b flex justify-between items-center sm:px-6">
-              <span className="font-mono text-xs text-slate-400 font-bold">RECORD {selectedRecord.id}</span>
-              <div className="flex gap-2 text-slate-500">
-                <button className="p-2 hover:bg-slate-100 rounded-lg"><Printer className="w-4 h-4" /></button>
-                <button className="p-2 hover:bg-slate-100 rounded-lg"><Share2 className="w-4 h-4" /></button>
-                <button onClick={() => setShowRecordModal(false)} className="text-xl px-2">×</button>
-              </div>
+              <button onClick={() => setShowPatientModal(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
             </div>
 
-            {/* Simulated Paper sheet of Clinical record */}
-            <div className="p-8 bg-slate-50 dark:bg-slate-950 max-h-[70vh] overflow-y-auto">
-              <div className="bg-white dark:bg-slate-900 p-8 border border-slate-150 rounded-xl shadow-sm space-y-6">
-                <div className="flex justify-between items-start border-b-2 border-blue-100 pb-4 mb-4">
-                  <div>
-                    <p className="text-xs font-bold uppercase text-blue-600 tracking-wider">MediCare HMS Systems</p>
-                    <h4 className="text-xl font-bold dark:text-white mt-1">Treatment & Clinical Summary</h4>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {[
+                  { label: "Full Name",   value: selectedPatient.fullName   },
+                  { label: "Gender",      value: selectedPatient.gender || "—"     },
+                  { label: "Blood Type",  value: selectedPatient.bloodType || "—", accent: "text-red-600 font-bold" },
+                  { label: "Phone",       value: selectedPatient.phone || "—"      },
+                  { label: "Address",     value: selectedPatient.address || "—"    },
+                  { label: "Username",    value: selectedPatient.username || "—"   },
+                ].map(field => (
+                  <div key={field.label} className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
+                    <p className="text-xs text-slate-400 uppercase font-semibold mb-1">{field.label}</p>
+                    <p className={`font-semibold ${field.accent || "text-slate-900 dark:text-white"}`}>{field.value}</p>
                   </div>
-                  <div className="text-right text-xs text-slate-400">
-                    <p>Case ID: <span className="text-slate-900 font-semibold">{selectedRecord.id}</span></p>
-                    <p className="mt-1">Date: {selectedRecord.visitDate}</p>
-                  </div>
-                </div>
+                ))}
+              </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm font-semibold">
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase block">Patient Name</span>
-                    <span className="text-slate-950 dark:text-white font-bold">{selectedRecord.patientName}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase block">Diagnosis</span>
-                    <span className="text-blue-600 font-bold">{selectedRecord.diagnosis}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase block font-bold mb-1">Presented Symptoms</span>
-                    <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-350">{selectedRecord.symptoms}</p>
-                  </div>
-
-                  <div>
-                    <span className="text-xs text-slate-400 uppercase block font-bold mb-1">Treatment & Plan</span>
-                    <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-350">{selectedRecord.treatmentPlan}</p>
-                  </div>
-
-                  {selectedRecord.internalNotes && (
-                    <div className="p-4 bg-slate-50 rounded-xl italic text-xs text-slate-500">
-                      <span className="text-xs text-slate-400 block uppercase font-bold not-italic mb-1">Clinical Notes</span>
-                      {selectedRecord.internalNotes}
+              {/* Appointment summary for this patient */}
+              <div className="pt-2">
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Appointments with you</p>
+                <div className="space-y-2">
+                  {docAppointments.filter(a => String(a.patientId) === String(selectedPatient.id)).length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">None yet.</p>
+                  ) : docAppointments.filter(a => String(a.patientId) === String(selectedPatient.id)).map(a => (
+                    <div key={a.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-950 p-3 rounded-xl text-sm">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{a.appointmentDate}</span>
+                      <span className={`px-2.5 py-0.5 text-[11px] font-bold uppercase rounded-full ${statusBadge(a.status)}`}>{a.status}</span>
                     </div>
-                  )}
-                </div>
-
-                {/* E-Signature monogram */}
-                <div className="pt-6 border-t flex justify-between items-center text-xs text-slate-400">
-                  <div>
-                    <p className="italic">Signed digitally by {selectedRecord.signedBy}</p>
-                    <p>Senior Clinician Officer</p>
-                  </div>
-                  <div className="w-16 h-16 opacity-30 select-none pointer-events-none">
-                    <FileCheck className="w-12 h-12 text-blue-600" />
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
-            
-            <div className="p-4 bg-slate-50 border-t flex justify-end">
-              <button 
-                onClick={() => setShowRecordModal(false)}
-                className="px-5 py-2 bg-slate-950 text-white text-xs font-semibold rounded-lg"
-              >
-                Close Viewer
-              </button>
+
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button onClick={() => setShowPatientModal(false)} className="px-5 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-semibold rounded-lg">Close</button>
             </div>
           </div>
         </div>
@@ -584,146 +454,178 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
       {/* UPDATE STATUS MODAL */}
       {showStatusModal && selectedAppt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border">
-            <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h3 className="font-bold text-slate-950 dark:text-white">Change Appointment Status</h3>
-              <button onClick={() => setShowStatusModal(false)} className="text-slate-450 hover:text-slate-700">×</button>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <h3 className="font-bold text-slate-950 dark:text-white">Update Appointment Status</h3>
+              <button onClick={() => setShowStatusModal(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-slate-600 font-semibold mb-4">
-                Update status for <span className="font-bold text-slate-950">{selectedAppt.patientName}</span>'s session.
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-slate-600 dark:text-slate-400 font-medium mb-4">
+                Appointment for <span className="font-bold text-slate-950 dark:text-white">{selectedAppt.patientName}</span> on {selectedAppt.appointmentDate}
               </p>
 
-              <div className="space-y-2">
-                <button
-                  onClick={() => handleUpdateStatus(selectedAppt.id, "Approved")}
-                  className="w-full flex items-center justify-between p-3 border hover:bg-slate-50 rounded-xl transition-all font-semibold text-sm"
-                >
-                  <span>Approve & Lock Slot</span>
-                  <CheckCircle className="w-5 h-5 text-teal-600" />
-                </button>
+              <button
+                onClick={() => handleUpdateStatus(selectedAppt.id, "CONFIRMED")}
+                className="w-full flex items-center justify-between p-3.5 border hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all font-semibold text-sm"
+              >
+                <span>Confirm Appointment</span>
+                <CheckCircle className="w-5 h-5 text-teal-600" />
+              </button>
 
-                <button
-                  onClick={() => handleUpdateStatus(selectedAppt.id, "Completed")}
-                  className="w-full flex items-center justify-between p-3 border hover:bg-slate-50 rounded-xl transition-all font-semibold text-sm"
-                >
-                  <span>Mark Visit Finished</span>
-                  <Check className="w-5 h-5 text-emerald-600" />
-                </button>
+              <button
+                onClick={() => handleUpdateStatus(selectedAppt.id, "COMPLETED")}
+                className="w-full flex items-center justify-between p-3.5 border hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all font-semibold text-sm"
+              >
+                <span>Mark as Completed</span>
+                <Check className="w-5 h-5 text-emerald-600" />
+              </button>
 
-                <button
-                  onClick={() => handleUpdateStatus(selectedAppt.id, "Cancelled")}
-                  className="w-full flex items-center justify-between p-3 border hover:bg-slate-55/90 rounded-xl text-red-600 transition-all font-semibold text-sm"
-                >
-                  <span>Cancel Visitation Request</span>
-                  <XCircle className="w-5 h-5 text-red-650" />
-                </button>
-              </div>
+              <button
+                onClick={() => handleUpdateStatus(selectedAppt.id, "CANCELLED")}
+                className="w-full flex items-center justify-between p-3.5 border hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl text-red-600 transition-all font-semibold text-sm"
+              >
+                <span>Cancel Appointment</span>
+                <XCircle className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: ADD MEDICAL RECORD */}
+      {/* ADD MEDICAL RECORD MODAL */}
       {showAddRecordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-            <div className="px-6 py-4 border-b flex justify-between items-center">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-lg text-slate-950 dark:text-white">New Medical Record</h3>
-                <p className="text-xs text-slate-500">Certify diagnosis,Symptoms description, and medical therapies prescribed.</p>
+                <p className="text-xs text-slate-500">Record a diagnosis and prescription for a patient.</p>
               </div>
-              <button onClick={() => setShowAddRecordModal(false)} className="text-slate-400 hover:text-slate-700">×</button>
+              <button onClick={() => setShowAddRecordModal(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
             </div>
-            <form onSubmit={handleAddRecordSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            <form onSubmit={handleAddRecord} className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-600">Select Patient *</label>
-                  <select
-                    required
-                    value={newRecord.patientId}
-                    onChange={(e) => setNewRecord({ ...newRecord, patientId: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm"
-                  >
-                    <option value="">Search for Patient...</option>
-                    {patients.map(p => (
-                      <option key={p.id} value={p.id}>{p.fullName} ({p.id})</option>
-                    ))}
+                  <label className="text-xs font-semibold text-slate-600">Patient *</label>
+                  <select required value={newRecord.patientId}
+                    onChange={e => setNewRecord({...newRecord, patientId: e.target.value})} className={inputCls}>
+                    <option value="">Select patient...</option>
+                    {docPatients.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
                   </select>
                 </div>
-
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-600">Observation Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={newRecord.visitDate}
-                    onChange={(e) => setNewRecord({ ...newRecord, visitDate: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"
-                  />
+                  <label className="text-xs font-semibold text-slate-600">Visit Date *</label>
+                  <input required type="date" value={newRecord.visitDate}
+                    onChange={e => setNewRecord({...newRecord, visitDate: e.target.value})} className={inputCls} />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">Primary Symptoms Presented *</label>
-                <textarea
-                  required
-                  value={newRecord.symptoms}
-                  onChange={(e) => setNewRecord({ ...newRecord, symptoms: e.target.value })}
-                  placeholder="Detail cough duration, fever, wheezing indicators..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm h-20"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">ICD-10 Primary Diagnosis *</label>
-                <input
-                  type="text"
-                  required
-                  value={newRecord.diagnosis}
-                  onChange={(e) => setNewRecord({ ...newRecord, diagnosis: e.target.value })}
+                <label className="text-xs font-semibold text-slate-600">Diagnosis *</label>
+                <input required type="text" value={newRecord.diagnosis}
+                  onChange={e => setNewRecord({...newRecord, diagnosis: e.target.value})}
                   placeholder="e.g. Acute Bronchitis J20.9"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"
-                />
+                  className={inputCls} />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">Treatment Plan / Prescription *</label>
-                <textarea
-                  required
-                  value={newRecord.treatmentPlan}
-                  onChange={(e) => setNewRecord({ ...newRecord, treatmentPlan: e.target.value })}
-                  placeholder="Medication, dosage interval, hydrology guides..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm h-24"
-                />
+                <label className="text-xs font-semibold text-slate-600">Prescription *</label>
+                <textarea required value={newRecord.prescription}
+                  onChange={e => setNewRecord({...newRecord, prescription: e.target.value})}
+                  placeholder="Medication, dosage, duration..."
+                  className={`${inputCls} h-28 resize-none`} />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">Internal Provider notes</label>
-                <textarea
-                  value={newRecord.internalNotes}
-                  onChange={(e) => setNewRecord({ ...newRecord, internalNotes: e.target.value })}
-                  placeholder="Confidential notes..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm h-16"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowAddRecordModal(false)}
-                  className="px-4 py-2 border rounded-lg text-sm text-slate-600"
-                >
-                  Discard
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm hover:bg-blue-700"
-                >
-                  Finalize Record
-                </button>
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => setShowAddRecordModal(false)} className="px-4 py-2 border rounded-lg text-sm text-slate-600">Discard</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm hover:bg-blue-700">Save Record</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MEDICAL RECORD MODAL */}
+      {showRecordModal && selectedRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <span className="font-mono text-xs text-slate-400 font-bold">RECORD #{selectedRecord.id}</span>
+              <div className="flex gap-2 text-slate-500">
+                <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                  <Share2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => setShowRecordModal(false)} className="text-xl px-2 leading-none hover:text-slate-700">×</button>
+              </div>
+            </div>
+
+            <div className="p-8 bg-slate-50 dark:bg-slate-950 max-h-[65vh] overflow-y-auto">
+              <div className="bg-white dark:bg-slate-900 p-8 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm space-y-6 relative">
+                {/* Watermark */}
+                <div className="absolute inset-x-0 top-1/3 text-center opacity-[0.04] select-none pointer-events-none rotate-12">
+                  <span className="text-7xl font-extrabold text-blue-600 tracking-widest block uppercase">CERTIFIED</span>
+                  <span className="text-2xl mt-1 text-blue-600 font-bold tracking-widest block">MEDICARE HMS</span>
+                </div>
+
+                {/* Header */}
+                <div className="flex justify-between items-start border-b-2 border-blue-100 dark:border-slate-700 pb-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-blue-600 tracking-wider">MediCare HMS</p>
+                    <h4 className="text-xl font-bold dark:text-white mt-1">Clinical Record Summary</h4>
+                  </div>
+                  <div className="text-right text-xs text-slate-400">
+                    <p>Record ID: <span className="text-slate-900 dark:text-white font-semibold">{selectedRecord.id}</span></p>
+                    <p className="mt-1">Visit Date: <span className="text-slate-900 dark:text-white font-semibold">{selectedRecord.visitDate}</span></p>
+                  </div>
+                </div>
+
+                {/* Patient / Doctor info */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase block font-semibold mb-1">Patient</span>
+                    <span className="font-bold text-slate-950 dark:text-white">{selectedRecord.patientName}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase block font-semibold mb-1">Attending Doctor</span>
+                    <span className="font-bold text-slate-950 dark:text-white">{selectedRecord.doctorName}</span>
+                  </div>
+                </div>
+
+                {/* Clinical details */}
+                <div className="space-y-5 pt-4 border-t border-slate-100 dark:border-slate-800 relative z-10">
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase block font-bold mb-2">Diagnosis</span>
+                    <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-xl p-3">
+                      <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">{selectedRecord.diagnosis || "—"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-400 uppercase block font-bold mb-2">Prescription</span>
+                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                      <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{selectedRecord.prescription || "—"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                  <div>
+                    <p className="font-semibold">Dr. {selectedRecord.doctorName}</p>
+                    <p>MediCare Hospital Management System</p>
+                  </div>
+                  <div className="opacity-30 select-none">
+                    <FileCheck className="w-10 h-10 text-blue-600" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button onClick={() => setShowRecordModal(false)} className="px-5 py-2 bg-slate-950 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-semibold rounded-lg">Close</button>
+            </div>
           </div>
         </div>
       )}
