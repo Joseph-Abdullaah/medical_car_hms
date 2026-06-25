@@ -35,8 +35,9 @@ namespace HospitalManagementSystem.Desktop
                 {
                     connection.Open();
 
-                    ExecuteSqlScript(connection, File.ReadAllText(schemaPath, Encoding.UTF8));
-                    ExecuteSqlScript(connection, File.ReadAllText(seedPath, Encoding.UTF8));
+                    // Intentionally only initialize the connection.
+                    // Schema/seed are managed manually in MySQL Workbench to avoid re-applying DDL/DML on every app run.
+
                 }
 
                 Console.WriteLine("MySQL schema and seed data initialized successfully.");
