@@ -39,7 +39,7 @@ export interface Department {
   doctorCount: number;
 }
 
-// Matches Appointments schema exactly. Status values match DB ENUM.
+// Matches Appointments schema. appointmentDate = "yyyy-MM-dd", appointmentTime = "HH:mm".
 export interface Appointment {
   id: string;
   patientId: string;
@@ -47,11 +47,8 @@ export interface Appointment {
   doctorId: string;
   doctorName: string;
   appointmentDate: string;
+  appointmentTime: string;
   status: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
-  // Optional legacy fields — not in DB schema; kept until DoctorPortal is updated
-  appointmentTime?: string;
-  reason?: string;
-  clinicalNotes?: string;
 }
 
 // Matches Medical_Records schema exactly.
@@ -304,6 +301,35 @@ class BridgeService {
     return result.doctor;
   }
 
+  public async updateDoctor(
+    id: string,
+    fullName: string,
+    deptId: number,
+    newPassword: string,
+  ): Promise<boolean> {
+    if (this.isWebView2Available()) {
+      return new Promise((resolve) => {
+        const removeListener = this.addWebViewMessageListener((messageData) => {
+          try {
+            const data = typeof messageData === "string" ? JSON.parse(messageData) : messageData;
+            if (data.action === "UPDATE_DOCTOR_RESPONSE") {
+              removeListener();
+              resolve(data.success);
+            }
+          } catch {}
+        });
+        this.postToC_Sharp("UPDATE_DOCTOR", { userId: id, fullName, deptId, newPassword });
+      });
+    }
+    const response = await fetch(`/api/doctors/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fullName, deptId, newPassword }),
+    });
+    const result = await response.json();
+    return result.success;
+  }
+
   public async deleteDoctor(id: string): Promise<boolean> {
     if (this.isWebView2Available()) {
       return new Promise((resolve) => {
@@ -350,6 +376,7 @@ class BridgeService {
     patientId: string;
     doctorId: string;
     appointmentDate: string;
+    appointmentTime: string;
   }): Promise<Appointment> {
     if (this.isWebView2Available()) {
       return new Promise((resolve, reject) => {
