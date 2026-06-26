@@ -63,6 +63,25 @@ namespace HospitalManagementSystem.Services
         }
 
         /// <summary>
+        /// Updates a doctor's profile (fullName, deptId) and optionally resets their password.
+        /// </summary>
+        public bool UpdateDoctor(int userId, string fullName, int deptId, string newPassword)
+        {
+            try
+            {
+                bool ok = _doctorRepository.UpdateProfile(userId, fullName, deptId);
+                if (!string.IsNullOrWhiteSpace(newPassword))
+                    _userRepository.UpdatePassword(userId, newPassword);
+                return ok;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DoctorService] UpdateDoctor failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Deletes a doctor account (cascades to Doctor_Profiles).
         /// </summary>
         public bool DeleteDoctor(int userId)

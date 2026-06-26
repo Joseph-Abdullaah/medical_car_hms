@@ -143,6 +143,24 @@ namespace HospitalManagementSystem.Repositories
         }
 
         /// <summary>
+        /// Updates the password for an existing user.
+        /// </summary>
+        public bool UpdatePassword(int userId, string password)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string query = "UPDATE Users SET password = @pass WHERE user_id = @uid";
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@uid",  userId);
+                    cmd.Parameters.AddWithValue("@pass", password);
+                    return cmd.ExecuteNonQuery() > 0;
+                }
+            }
+        }
+
+        /// <summary>
         /// Deletes a user and their profile (cascade handles profile deletion).
         /// </summary>
         public bool DeleteUser(int userId)
