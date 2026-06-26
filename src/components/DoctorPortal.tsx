@@ -66,8 +66,9 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
   // ── Filtered data for this doctor only ───────────────────────────────────────
   const doctorId = String(user.id);
 
-  const docAppointments = appointments.filter(a => String(a.doctorId) === doctorId);
-  const docRecords      = records.filter(r => String(r.doctorId) === doctorId);
+  const docAppointments       = appointments.filter(a => String(a.doctorId) === doctorId);
+  const docAppointmentsActive = docAppointments.filter(a => a.status !== "CANCELLED");
+  const docRecords            = records.filter(r => String(r.doctorId) === doctorId);
 
   // Patients who have at least one appointment with this doctor
   const docPatientIds = new Set(docAppointments.map(a => String(a.patientId)));
@@ -134,7 +135,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
               Good day, {user.fullName}
             </h3>
             <p className="text-sm text-slate-500 font-medium mt-1">
-              You have {docAppointments.length} appointment{docAppointments.length !== 1 ? "s" : ""} on record.
+              You have {docAppointmentsActive.length} active appointment{docAppointmentsActive.length !== 1 ? "s" : ""} (PENDING, CONFIRMED, COMPLETED).
             </p>
           </div>
 
@@ -157,7 +158,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ user, activeSection 
                 </div>
               </div>
               <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Appointments</p>
-              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{docAppointments.length}</h3>
+              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{docAppointmentsActive.length}</h3>
             </div>
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
