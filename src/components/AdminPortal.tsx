@@ -9,6 +9,7 @@ import {
   Layers,
   Pencil,
   AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { Bridge, Patient, Doctor, Appointment, Department } from "../services/bridge";
 
@@ -16,6 +17,13 @@ interface AdminPortalProps {
   activeSection: string;
   setActiveSection: (sec: string) => void;
 }
+
+// Shared time slots used across all appointment scheduling
+const TIME_SLOTS = [
+  "08:00","08:30","09:00","09:30","10:00","10:30",
+  "11:00","11:30","13:00","13:30","14:00","14:30",
+  "15:00","15:30","16:00","16:30",
+];
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   // ── Data ─────────────────────────────────────────────────────────────────────
@@ -33,25 +41,54 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   const [apptSearch,       setApptSearch]       = useState("");
   const [apptStatusFilter, setApptStatusFilter] = useState("all");
 
-  // ── Modals ────────────────────────────────────────────────────────────────────
-  const [showAddPatient, setShowAddPatient] = useState(false);
-  const [showAddDoctor,  setShowAddDoctor]  = useState(false);
-  const [showAddAppt,    setShowAddAppt]    = useState(false);
-  const [showAddDept,    setShowAddDept]    = useState(false);
-  const [showEditDept,   setShowEditDept]   = useState(false);
-  const [editDept,       setEditDept]       = useState<Department | null>(null);
+  // ── Custom confirm dialog ──────────────────────────────────────────────────────
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
-  // ── Form state ────────────────────────────────────────────────────────────────
+  const showConfirm = (message: string, onConfirm: () => void) =>
+    setConfirmDialog({ message, onConfirm });
+
+  // ── Modal state ───────────────────────────────────────────────────────────────
+  const [showAddPatient,  setShowAddPatient]  = useState(false);
+  const [showEditPatient, setShowEditPatient] = useState(false);
+  const [showAddDoctor,   setShowAddDoctor]   = useState(false);
+  const [showEditDoctor,  setShowEditDoctor]  = useState(false);
+  const [showAddAppt,     setShowAddAppt]     = useState(false);
+  const [showAddDept,     setShowAddDept]     = useState(false);
+  const [showEditDept,    setShowEditDept]    = useState(false);
+  const [editDept,        setEditDept]        = useState<Department | null>(null);
+
+  // ── Form state — Add Patient ───────────────────────────────────────────────────
   const [newPatient, setNewPatient] = useState({
     fullName: "", username: "", password: "",
     bloodType: "O+", gender: "Male", phone: "", address: "",
   });
+
+  // ── Form state — Edit Patient ─────────────────────────────────────────────────
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [editPatientForm, setEditPatientForm] = useState({
+    fullName: "", bloodType: "", gender: "", phone: "", address: "",
+  });
+
+  // ── Form state — Add Doctor ───────────────────────────────────────────────────
   const [newDoctor, setNewDoctor] = useState({
     fullName: "", username: "", password: "", deptId: "",
   });
-  const [newAppt, setNewAppt] = useState({
-    patientId: "", doctorId: "", appointmentDate: "",
+
+  // ── Form state — Edit Doctor ──────────────────────────────────────────────────
+  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
+  const [editDoctorForm, setEditDoctorForm] = useState({
+    fullName: "", deptId: "", newPassword: "",
   });
+
+  // ── Form state — Appointment ──────────────────────────────────────────────────
+  const [newAppt, setNewAppt] = useState({
+    patientId: "", doctorId: "", appointmentDate: "", appointmentTime: "09:00",
+  });
+
+  // ── Form state — Department ───────────────────────────────────────────────────
   const [newDeptName,  setNewDeptName]  = useState("");
   const [editDeptName, setEditDeptName] = useState("");
 
@@ -73,7 +110,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
       setAppointments(apptList);
       setDepartments(deptList);
     } catch (err) {
-      console.error("AdminPortal fetchData failed:", err);
       setError("Failed to load data. Check database connection.");
     } finally {
       setLoading(false);
@@ -81,12 +117,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   };
 
   // ── Dashboard computed values ─────────────────────────────────────────────────
-
-  // Appointments grouped by day of week — derived from real DB data
   const weeklyChartData = (() => {
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     return days.map((day, idx) => {
-      const dayIndex = (idx + 1) % 7; // Mon=1 … Sat=6, Sun=0
+      const dayIndex = (idx + 1) % 7;
       return {
         day,
         count: appointments.filter(a => {
@@ -117,18 +151,45 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
       setShowAddPatient(false);
       setNewPatient({ fullName: "", username: "", password: "", bloodType: "O+", gender: "Male", phone: "", address: "" });
       fetchData();
-    } catch (err: any) {
-      alert(err.message || "Failed to add patient.");
-    }
+    } catch (err: any) { alert(err.message || "Failed to add patient."); }
   };
 
-  const handleDeletePatient = async (id: string) => {
-    if (!confirm("Delete this patient and all their records?")) return;
-    try {
-      await Bridge.deletePatient(id);
-      fetchData();
-    } catch (err) { console.error(err); }
+  const openEditPatient = (p: Patient) => {
+    setEditingPatient(p);
+    setEditPatientForm({
+      fullName:  p.fullName,
+      bloodType: p.bloodType,
+      gender:    p.gender,
+      phone:     p.phone,
+      address:   p.address,
+    });
+    setShowEditPatient(true);
   };
+
+  const handleEditPatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPatient) return;
+    try {
+      await Bridge.updatePatientProfile(
+        parseInt(editingPatient.id),
+        editPatientForm.fullName,
+        editPatientForm.bloodType,
+        editPatientForm.gender,
+        editPatientForm.phone,
+        editPatientForm.address,
+      );
+      setShowEditPatient(false);
+      setEditingPatient(null);
+      fetchData();
+    } catch (err: any) { alert(err.message || "Failed to update patient."); }
+  };
+
+  const handleDeletePatient = (id: string, name: string) =>
+    showConfirm(`Delete patient "${name}" and all their records? This cannot be undone.`, async () => {
+      try { await Bridge.deletePatient(id); fetchData(); }
+      catch (err) { console.error(err); }
+      finally { setConfirmDialog(null); }
+    });
 
   // ── Handlers — Doctors ────────────────────────────────────────────────────────
   const handleAddDoctor = async (e: React.FormEvent) => {
@@ -142,18 +203,40 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
       setShowAddDoctor(false);
       setNewDoctor({ fullName: "", username: "", password: "", deptId: "" });
       fetchData();
-    } catch (err: any) {
-      alert(err.message || "Failed to add doctor.");
-    }
+    } catch (err: any) { alert(err.message || "Failed to add doctor."); }
   };
 
-  const handleDeleteDoctor = async (id: string) => {
-    if (!confirm("Delete this doctor?")) return;
-    try {
-      await Bridge.deleteDoctor(id);
-      fetchData();
-    } catch (err) { console.error(err); }
+  const openEditDoctor = (d: Doctor) => {
+    setEditingDoctor(d);
+    setEditDoctorForm({ fullName: d.fullName, deptId: String(d.deptId), newPassword: "" });
+    setShowEditDoctor(true);
   };
+
+  const handleEditDoctor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoctor || !editDoctorForm.fullName || !editDoctorForm.deptId) {
+      alert("Full name and department are required.");
+      return;
+    }
+    try {
+      await Bridge.updateDoctor(
+        editingDoctor.id,
+        editDoctorForm.fullName,
+        parseInt(editDoctorForm.deptId),
+        editDoctorForm.newPassword,
+      );
+      setShowEditDoctor(false);
+      setEditingDoctor(null);
+      fetchData();
+    } catch (err: any) { alert(err.message || "Failed to update doctor."); }
+  };
+
+  const handleDeleteDoctor = (id: string, name: string) =>
+    showConfirm(`Delete doctor "${name}"? This cannot be undone.`, async () => {
+      try { await Bridge.deleteDoctor(id); fetchData(); }
+      catch (err) { console.error(err); }
+      finally { setConfirmDialog(null); }
+    });
 
   // ── Handlers — Appointments ───────────────────────────────────────────────────
   const handleAddAppt = async (e: React.FormEvent) => {
@@ -165,11 +248,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
     try {
       await Bridge.addAppointment(newAppt);
       setShowAddAppt(false);
-      setNewAppt({ patientId: "", doctorId: "", appointmentDate: "" });
+      setNewAppt({ patientId: "", doctorId: "", appointmentDate: "", appointmentTime: "09:00" });
       fetchData();
-    } catch (err: any) {
-      alert(err.message || "Failed to schedule appointment.");
-    }
+    } catch (err: any) { alert(err.message || "Failed to schedule appointment."); }
   };
 
   // ── Handlers — Departments ────────────────────────────────────────────────────
@@ -195,26 +276,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
     } catch (err) { console.error(err); }
   };
 
-  const handleDeleteDept = async (id: number) => {
-    if (!confirm("Delete this department? Fails if doctors are still assigned.")) return;
-    try {
-      await Bridge.deleteDepartment(id);
-      fetchData();
-    } catch (err) { console.error(err); }
-  };
+  const handleDeleteDept = (id: number, name: string) =>
+    showConfirm(`Delete department "${name}"? Fails if doctors are still assigned.`, async () => {
+      try { await Bridge.deleteDepartment(id); fetchData(); }
+      catch (err) { console.error(err); }
+      finally { setConfirmDialog(null); }
+    });
 
   // ── Filtered lists ────────────────────────────────────────────────────────────
   const filteredPatients = patients.filter(p =>
     p.fullName.toLowerCase().includes(patientSearch.toLowerCase()) ||
     String(p.id).includes(patientSearch)
   );
-
   const filteredDoctors = doctors.filter(d =>
     (d.fullName.toLowerCase().includes(doctorSearch.toLowerCase()) ||
      String(d.id).includes(doctorSearch)) &&
     (doctorDeptFilter === "all" || d.deptName === doctorDeptFilter)
   );
-
   const filteredAppointments = appointments.filter(a =>
     (a.patientName.toLowerCase().includes(apptSearch.toLowerCase()) ||
      a.doctorName.toLowerCase().includes(apptSearch.toLowerCase()) ||
@@ -233,116 +311,68 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
 
   const inputCls = "w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-sm outline-none focus:ring-1 focus:ring-blue-600";
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-6">
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-xl text-sm text-red-600 font-medium flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+          <AlertCircle className="w-4 h-4 shrink-0" />{error}
         </div>
       )}
 
       {/* ── DASHBOARD ── */}
       {activeSection === "dashboard" && (
         <>
-          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">Total Patients</p>
-                  <h3 className="text-3xl font-extrabold text-slate-950 dark:text-white">{patients.length}</h3>
+            {[
+              { label: "Total Patients",      value: patients.length,     icon: <Users className="w-6 h-6" />,      bg: "bg-blue-100 dark:bg-blue-900/30 text-blue-600",   sub: `${departments.length} dept${departments.length !== 1 ? "s" : ""} active` },
+              { label: "Active Doctors",       value: doctors.length,      icon: <Stethoscope className="w-6 h-6" />, bg: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600", sub: `Across ${departments.length} department${departments.length !== 1 ? "s" : ""}` },
+              { label: "Total Appointments",   value: appointments.length, icon: <CalendarDays className="w-6 h-6" />,bg: "bg-purple-100 dark:bg-purple-900/30 text-purple-600", sub: `${appointments.filter(a => a.status === "PENDING").length} pending review` },
+            ].map(card => (
+              <div key={card.label} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">{card.label}</p>
+                    <h3 className="text-3xl font-extrabold text-slate-950 dark:text-white">{card.value}</h3>
+                  </div>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${card.bg}`}>{card.icon}</div>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600">
-                  <Users className="w-6 h-6" />
-                </div>
+                <div className="mt-4 text-xs text-slate-500">{card.sub}</div>
               </div>
-              <div className="mt-4 text-xs text-slate-500">
-                {departments.length} department{departments.length !== 1 ? "s" : ""} active
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">Active Doctors</p>
-                  <h3 className="text-3xl font-extrabold text-slate-950 dark:text-white">{doctors.length}</h3>
-                </div>
-                <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600">
-                  <Stethoscope className="w-6 h-6" />
-                </div>
-              </div>
-              <div className="mt-4 text-xs text-slate-500">
-                Across {departments.length} department{departments.length !== 1 ? "s" : ""}
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">Total Appointments</p>
-                  <h3 className="text-3xl font-extrabold text-slate-950 dark:text-white">{appointments.length}</h3>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center text-purple-600">
-                  <CalendarDays className="w-6 h-6" />
-                </div>
-              </div>
-              <div className="mt-4 text-xs text-slate-500">
-                {appointments.filter(a => a.status === "PENDING").length} pending review
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Chart + Status Breakdown */}
           <div className="grid grid-cols-12 gap-6">
-            {/* Weekly Bar Chart — built from real DB appointment dates */}
             <div className="col-span-12 lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="font-bold text-slate-950 dark:text-white text-base">Appointments by Day of Week</h4>
-                <span className="text-xs text-slate-500 font-semibold">{appointments.length} total records</span>
+                <span className="text-xs text-slate-500 font-semibold">{appointments.length} total</span>
               </div>
-              <div className="flex-1 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden" style={{ minHeight: "240px" }}>
+              <div className="flex-1 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden" style={{ minHeight: 240 }}>
                 <svg viewBox="0 0 756 230" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-                  {/* Grid lines */}
-                  {[0.25, 0.5, 0.75, 1].map(ratio => {
-                    const y = 200 - ratio * 170;
+                  {[0.25, 0.5, 0.75, 1].map(r => {
+                    const y = 200 - r * 170;
                     return (
-                      <g key={ratio}>
+                      <g key={r}>
                         <line x1="36" x2="745" y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 2" />
-                        <text x="30" y={y + 4} fontSize="8" fill="#94a3b8" textAnchor="end">
-                          {Math.round(maxBarCount * ratio)}
-                        </text>
+                        <text x="30" y={y + 4} fontSize="9" fill="#94a3b8" textAnchor="end">{Math.round(maxBarCount * r)}</text>
                       </g>
                     );
                   })}
-                  {/* Bars */}
                   {weeklyChartData.map((d, i) => {
-                    const barW = 72;
-                    const gap  = 24;
-                    const x    = 40 + i * (barW + gap);
-                    const barH = (d.count / maxBarCount) * 170;
-                    const y    = 200 - barH;
+                    const bw = 72, gap = 24, x = 40 + i * (bw + gap);
+                    const bh = (d.count / maxBarCount) * 170;
+                    const y  = 200 - bh;
                     return (
                       <g key={d.day}>
-                        {barH > 0 ? (
-                          <rect x={x} y={y} width={barW} height={barH} rx="5" fill="#2563eb" opacity="0.85" />
-                        ) : (
-                          <rect x={x} y={198} width={barW} height={2} rx="1" fill="#e2e8f0" />
-                        )}
-                        {d.count > 0 && (
-                          <text x={x + barW / 2} y={y - 5} fontSize="9" fill="#475569" textAnchor="middle" fontWeight="600">
-                            {d.count}
-                          </text>
-                        )}
-                        <text x={x + barW / 2} y="218" fontSize="10" fill="#64748b" textAnchor="middle">{d.day}</text>
+                        {bh > 0 ? <rect x={x} y={y} width={bw} height={bh} rx="5" fill="#2563eb" opacity="0.85" /> : <rect x={x} y={198} width={bw} height={2} rx="1" fill="#e2e8f0" />}
+                        {d.count > 0 && <text x={x + bw / 2} y={y - 5} fontSize="9" fill="#475569" textAnchor="middle" fontWeight="600">{d.count}</text>}
+                        <text x={x + bw / 2} y="218" fontSize="10" fill="#64748b" textAnchor="middle">{d.day}</text>
                       </g>
                     );
                   })}
@@ -350,7 +380,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
               </div>
             </div>
 
-            {/* Appointment Status Breakdown */}
             <div className="col-span-12 lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 flex flex-col">
               <h4 className="font-bold text-slate-950 dark:text-white text-base mb-6">Status Breakdown</h4>
               <div className="flex flex-col gap-4 flex-1 justify-center">
@@ -364,8 +393,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                   </div>
                 ))}
                 <div className="mt-3 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-sm font-bold text-slate-900 dark:text-white">
-                  <span>Total</span>
-                  <span>{appointments.length}</span>
+                  <span>Total</span><span>{appointments.length}</span>
                 </div>
               </div>
             </div>
@@ -379,12 +407,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
             <div className="relative flex-1 max-w-md w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text" value={patientSearch}
-                onChange={e => setPatientSearch(e.target.value)}
+              <input type="text" value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
                 placeholder="Search by name or ID..."
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-blue-600 outline-none"
-              />
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-blue-600 outline-none" />
             </div>
             <button onClick={() => setShowAddPatient(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-sm transition-all">
@@ -397,7 +422,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                    {["ID", "Full Name", "Blood Type", "Gender", "Phone", "Address", "Actions"].map(h => (
+                    {["ID","Full Name","Blood Type","Gender","Phone","Address","Actions"].map(h => (
                       <th key={h} className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
                     ))}
                   </tr>
@@ -419,12 +444,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                         <td className="px-6 py-4 text-sm font-bold text-red-600">{p.bloodType || "—"}</td>
                         <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{p.gender || "—"}</td>
                         <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{p.phone || "—"}</td>
-                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-[180px] truncate">{p.address || "—"}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-[160px] truncate">{p.address || "—"}</td>
                         <td className="px-6 py-4 text-right">
-                          <button onClick={() => handleDeletePatient(p.id)}
-                            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete Patient">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => openEditPatient(p)}
+                              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 rounded-lg transition-colors" title="Edit Patient">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeletePatient(p.id, p.fullName)}
+                              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete Patient">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -464,7 +495,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                    {["ID", "Full Name", "Username", "Department", "Actions"].map(h => (
+                    {["ID","Full Name","Username","Department","Actions"].map(h => (
                       <th key={h} className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
                     ))}
                   </tr>
@@ -490,10 +521,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button onClick={() => handleDeleteDoctor(d.id)}
-                            className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete Doctor">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => openEditDoctor(d)}
+                              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 rounded-lg transition-colors" title="Edit Doctor">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteDoctor(d.id, d.fullName)}
+                              className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete Doctor">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -536,14 +573,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                    {["ID", "Patient", "Doctor", "Date", "Status"].map(h => (
+                    {["ID","Patient","Doctor","Date","Time","Status"].map(h => (
                       <th key={h} className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredAppointments.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-10 text-sm text-slate-400 italic">No appointments found.</td></tr>
+                    <tr><td colSpan={6} className="text-center py-10 text-sm text-slate-400 italic">No appointments found.</td></tr>
                   ) : filteredAppointments.map(a => {
                     const initials = a.patientName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
                     return (
@@ -557,10 +594,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-slate-700 dark:text-slate-300">{a.doctorName}</td>
                         <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{a.appointmentDate}</td>
+                        <td className="px-6 py-4 text-sm text-slate-500 font-medium">{a.appointmentTime}</td>
                         <td className="px-6 py-4">
-                          <span className={`px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${statusBadge(a.status)}`}>
-                            {a.status}
-                          </span>
+                          <span className={`px-2.5 py-1 text-[11px] font-bold uppercase rounded-full ${statusBadge(a.status)}`}>{a.status}</span>
                         </td>
                       </tr>
                     );
@@ -591,14 +627,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                    {["Dept ID", "Department Name", "Doctor Count", "Actions"].map(h => (
+                    {["Dept ID","Department Name","Doctor Count","Actions"].map(h => (
                       <th key={h} className={`px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {departments.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center py-10 text-sm text-slate-400 italic">No departments yet. Add one to get started.</td></tr>
+                    <tr><td colSpan={4} className="text-center py-10 text-sm text-slate-400 italic">No departments yet.</td></tr>
                   ) : departments.map(dept => (
                     <tr key={dept.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="px-6 py-4 text-sm font-semibold text-blue-600">{dept.id}</td>
@@ -616,13 +652,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => { setEditDept(dept); setEditDeptName(dept.deptName); setShowEditDept(true); }}
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => { setEditDept(dept); setEditDeptName(dept.deptName); setShowEditDept(true); }}
                             className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 rounded-lg transition-colors" title="Edit">
                             <Pencil className="w-4 h-4" />
                           </button>
-                          <button onClick={() => handleDeleteDept(dept.id)}
+                          <button onClick={() => handleDeleteDept(dept.id, dept.deptName)}
                             className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition-colors" title="Delete">
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -638,6 +673,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
       )}
 
       {/* ══ MODALS ══════════════════════════════════════════════════════════════ */}
+
+      {/* CUSTOM CONFIRM DIALOG */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">Confirm Action</h3>
+                <p className="text-sm text-slate-500 mt-1 leading-relaxed">{confirmDialog.message}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium transition-colors">
+                Cancel
+              </button>
+              <button onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-sm transition-colors">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ADD PATIENT */}
       {showAddPatient && (
@@ -699,6 +761,58 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
         </div>
       )}
 
+      {/* EDIT PATIENT */}
+      {showEditPatient && editingPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-lg text-slate-950 dark:text-white">Edit Patient</h3>
+                <p className="text-xs text-slate-500">Update profile fields for <span className="font-semibold">{editingPatient.fullName}</span>.</p>
+              </div>
+              <button onClick={() => setShowEditPatient(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+            </div>
+            <form onSubmit={handleEditPatient} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">Full Name *</label>
+                  <input required type="text" value={editPatientForm.fullName}
+                    onChange={e => setEditPatientForm({...editPatientForm, fullName: e.target.value})} className={inputCls} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">Blood Type</label>
+                  <select value={editPatientForm.bloodType} onChange={e => setEditPatientForm({...editPatientForm, bloodType: e.target.value})} className={inputCls}>
+                    <option value="">Select...</option>
+                    {["A+","A-","B+","B-","O+","O-","AB+","AB-"].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">Gender</label>
+                  <select value={editPatientForm.gender} onChange={e => setEditPatientForm({...editPatientForm, gender: e.target.value})} className={inputCls}>
+                    <option value="">Select...</option>
+                    <option>Male</option><option>Female</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">Phone</label>
+                  <input type="text" value={editPatientForm.phone}
+                    onChange={e => setEditPatientForm({...editPatientForm, phone: e.target.value})} className={inputCls} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">Address</label>
+                  <input type="text" value={editPatientForm.address}
+                    onChange={e => setEditPatientForm({...editPatientForm, address: e.target.value})} className={inputCls} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => setShowEditPatient(false)} className="px-4 py-2 border rounded-lg text-sm text-slate-600">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm hover:bg-blue-700">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ADD DOCTOR */}
       {showAddDoctor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
@@ -711,21 +825,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
               <button onClick={() => setShowAddDoctor(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
             </div>
             <form onSubmit={handleAddDoctor} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">Full Name *</label>
-                <input required type="text" value={newDoctor.fullName} placeholder="Dr. Jane Smith"
-                  onChange={e => setNewDoctor({...newDoctor, fullName: e.target.value})} className={inputCls} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">Username *</label>
-                <input required type="text" value={newDoctor.username} placeholder="dr.jsmith"
-                  onChange={e => setNewDoctor({...newDoctor, username: e.target.value})} className={inputCls} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">Password *</label>
-                <input required type="password" value={newDoctor.password} placeholder="••••••••"
-                  onChange={e => setNewDoctor({...newDoctor, password: e.target.value})} className={inputCls} />
-              </div>
+              {[
+                { label: "Full Name *",  key: "fullName",  placeholder: "Dr. Jane Smith", type: "text"     },
+                { label: "Username *",   key: "username",  placeholder: "dr.jsmith",      type: "text"     },
+                { label: "Password *",   key: "password",  placeholder: "••••••••",       type: "password" },
+              ].map(f => (
+                <div key={f.key} className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">{f.label}</label>
+                  <input required type={f.type} placeholder={f.placeholder}
+                    value={(newDoctor as any)[f.key]}
+                    onChange={e => setNewDoctor({...newDoctor, [f.key]: e.target.value})} className={inputCls} />
+                </div>
+              ))}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600">Department *</label>
                 <select required value={newDoctor.deptId} onChange={e => setNewDoctor({...newDoctor, deptId: e.target.value})} className={inputCls}>
@@ -742,6 +853,44 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
         </div>
       )}
 
+      {/* EDIT DOCTOR */}
+      {showEditDoctor && editingDoctor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-lg text-slate-950 dark:text-white">Edit Doctor</h3>
+                <p className="text-xs text-slate-500">Update profile for <span className="font-semibold">{editingDoctor.fullName}</span>.</p>
+              </div>
+              <button onClick={() => setShowEditDoctor(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+            </div>
+            <form onSubmit={handleEditDoctor} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Full Name *</label>
+                <input required type="text" value={editDoctorForm.fullName}
+                  onChange={e => setEditDoctorForm({...editDoctorForm, fullName: e.target.value})} className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Department *</label>
+                <select required value={editDoctorForm.deptId} onChange={e => setEditDoctorForm({...editDoctorForm, deptId: e.target.value})} className={inputCls}>
+                  <option value="">Select department...</option>
+                  {departments.map(d => <option key={d.id} value={String(d.id)}>{d.deptName}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">New Password <span className="text-slate-400 font-normal">(leave blank to keep current)</span></label>
+                <input type="password" value={editDoctorForm.newPassword} placeholder="••••••••"
+                  onChange={e => setEditDoctorForm({...editDoctorForm, newPassword: e.target.value})} className={inputCls} />
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onClick={() => setShowEditDoctor(false)} className="px-4 py-2 border rounded-lg text-sm text-slate-600">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg text-sm hover:bg-blue-700">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* SCHEDULE APPOINTMENT */}
       {showAddAppt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-sm">
@@ -749,7 +898,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-lg text-slate-950 dark:text-white">Schedule Appointment</h3>
-                <p className="text-xs text-slate-500">Assign a patient to a doctor on a specific date.</p>
+                <p className="text-xs text-slate-500">Assign a patient to a doctor on a specific date and time.</p>
               </div>
               <button onClick={() => setShowAddAppt(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
             </div>
@@ -772,6 +921,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                 <label className="text-xs font-semibold text-slate-600">Appointment Date *</label>
                 <input required type="date" value={newAppt.appointmentDate}
                   onChange={e => setNewAppt({...newAppt, appointmentDate: e.target.value})} className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Appointment Time *</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {TIME_SLOTS.map(t => (
+                    <button key={t} type="button" onClick={() => setNewAppt({...newAppt, appointmentTime: t})}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all ${
+                        newAppt.appointmentTime === t
+                          ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30 text-blue-600"
+                          : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                      }`}>{t}</button>
+                  ))}
+                </div>
               </div>
               <div className="flex justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <button type="button" onClick={() => setShowAddAppt(false)} className="px-4 py-2 border rounded-lg text-sm text-slate-600">Cancel</button>
