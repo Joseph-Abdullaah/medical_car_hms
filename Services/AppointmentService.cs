@@ -204,6 +204,7 @@ namespace HospitalManagementSystem.Services
 
         private static dynamic MapAppointmentRow(DataRow row)
         {
+            var dt = Convert.ToDateTime(row["appointment_date"]);
             return new
             {
                 id              = Convert.ToInt32(row["id"]),
@@ -211,7 +212,8 @@ namespace HospitalManagementSystem.Services
                 patientName     = row["patient_name"].ToString(),
                 doctorId        = Convert.ToInt32(row["doctor_id"]),
                 doctorName      = row["doctor_name"].ToString(),
-                appointmentDate = Convert.ToDateTime(row["appointment_date"]).ToString("yyyy-MM-dd"),
+                appointmentDate = dt.ToString("yyyy-MM-dd"),
+                appointmentTime = dt.ToString("HH:mm"),
                 status          = row["status"].ToString()
             };
         }
