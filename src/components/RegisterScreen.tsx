@@ -36,17 +36,24 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !username || !password || !confirmPassword) {
+    const trimmedFullName = fullName.trim();
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirm  = confirmPassword.trim();
+    const trimmedPhone    = phone.trim();
+    const trimmedAddress  = address.trim();
+
+    if (!trimmedFullName || !trimmedUsername || !trimmedPassword || !trimmedConfirm) {
       setError("Please fill in all requested fields.");
       return;
     }
 
-    if (!bloodType || !gender || !phone || !address) {
+    if (!bloodType || !gender || !trimmedPhone || !trimmedAddress) {
       setError("Please fill in all required patient profile fields.");
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (trimmedPassword !== trimmedConfirm) {
       setError("Passwords do not match.");
       return;
     }
@@ -61,13 +68,13 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
       setError("");
 
       const user = await Bridge.register(
-        fullName,
-        username,
-        password,
+        trimmedFullName,
+        trimmedUsername,
+        trimmedPassword,
         bloodType,
         gender,
-        phone,
-        address,
+        trimmedPhone,
+        trimmedAddress,
       );
 
       onRegisterSuccess(user);

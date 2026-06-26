@@ -17,7 +17,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onNavi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    if (!trimmedUsername || !trimmedPassword) {
       setError("Please fill in all requested fields.");
       return;
     }
@@ -25,8 +27,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onNavi
     try {
       setLoading(true);
       setError("");
-      
-      const user = await Bridge.login(username, password, role);
+
+      const user = await Bridge.login(trimmedUsername, trimmedPassword, role);
       onLoginSuccess(user);
     } catch (err: any) {
       setError(err.message || "Invalid authentication credentials.");

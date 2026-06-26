@@ -46,6 +46,30 @@ namespace HospitalManagementSystem.Repositories
         }
 
         /// <summary>
+        /// Updates a doctor's profile fields (full_name and dept_id).
+        /// </summary>
+        public bool UpdateProfile(int userId, string fullName, int deptId)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string query = @"
+                    UPDATE Doctor_Profiles
+                    SET full_name = @name,
+                        dept_id   = @dept
+                    WHERE user_id = @uid";
+
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@uid",  userId);
+                    cmd.Parameters.AddWithValue("@name", fullName ?? (object)DBNull.Value);
+                    cmd.Parameters.AddWithValue("@dept", deptId);
+                    return cmd.ExecuteNonQuery() > 0;
+                }
+            }
+        }
+
+        /// <summary>
         /// Fetches a single doctor by their user_id.
         /// </summary>
         public DataTable FetchById(int userId)

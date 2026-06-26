@@ -1,0 +1,57 @@
+erDiagram
+    Departments {
+        INT dept_id PK
+        VARCHAR dept_name
+    }
+
+    Users {
+        INT user_id PK
+        VARCHAR username
+        VARCHAR password
+        ENUM role
+    }
+
+    Patient_Profiles {
+        INT user_id PK, FK
+        VARCHAR full_name
+        VARCHAR blood_type
+        VARCHAR gender
+        VARCHAR phone
+        VARCHAR address
+    }
+
+    Doctor_Profiles {
+        INT user_id PK, FK
+        INT dept_id FK
+        VARCHAR full_name
+    }
+
+    Appointments {
+        INT appointment_id PK
+        INT patient_id FK
+        INT doctor_id FK
+        DATETIME appointment_date
+        ENUM status
+    }
+
+    Medical_Records {
+        INT record_id PK
+        INT patient_id FK
+        INT doctor_id FK
+        TEXT diagnosis
+        TEXT prescription
+        DATETIME visit_date
+    }
+
+    %% Relationships
+
+    Departments ||--o{ Doctor_Profiles : "has"
+
+    Users ||--|| Patient_Profiles : "patient profile"
+    Users ||--|| Doctor_Profiles : "doctor profile"
+
+    Users ||--o{ Appointments : "patient"
+    Users ||--o{ Appointments : "doctor"
+
+    Users ||--o{ Medical_Records : "patient"
+    Users ||--o{ Medical_Records : "doctor"

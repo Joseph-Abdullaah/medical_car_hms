@@ -34,6 +34,7 @@ namespace HospitalManagementSystem.Desktop
                     case "UPDATE_PATIENT_PROFILE":   HandleUpdatePatientProfile(payload, bridge);   break;
                     case "GET_DOCTORS":              HandleGetDoctors(bridge);                      break;
                     case "ADD_DOCTOR":               HandleAddDoctor(payload, bridge);              break;
+                    case "UPDATE_DOCTOR":            HandleUpdateDoctor(payload, bridge);           break;
                     case "DELETE_DOCTOR":            HandleDeleteDoctor(payload, bridge);           break;
                     case "GET_APPOINTMENTS":         HandleGetAppointments(bridge);                 break;
                     case "ADD_APPOINTMENT":          HandleAddAppointment(payload, bridge);         break;
@@ -164,6 +165,17 @@ namespace HospitalManagementSystem.Desktop
                 bridge.SendResponseToUI("ADD_DOCTOR_RESPONSE", null, false, "Username already taken or department not found.");
         }
 
+        private static void HandleUpdateDoctor(dynamic payload, WebViewBridge bridge)
+        {
+            int    userId      = Convert.ToInt32(payload.userId);
+            string fullName    = (string)payload.fullName    ?? "";
+            int    deptId      = Convert.ToInt32(payload.deptId);
+            string newPassword = (string)payload.newPassword ?? "";
+
+            bool success = DoctorService.UpdateDoctor(userId, fullName, deptId, newPassword);
+            bridge.SendResponseToUI("UPDATE_DOCTOR_RESPONSE", new { userId }, success, success ? "" : "Update failed.");
+        }
+
         private static void HandleDeleteDoctor(dynamic payload, WebViewBridge bridge)
         {
             int userId = Convert.ToInt32(payload.userId);
@@ -184,8 +196,10 @@ namespace HospitalManagementSystem.Desktop
             int    patientId = Convert.ToInt32(payload.patientId);
             int    doctorId  = Convert.ToInt32(payload.doctorId);
             string date      = (string)payload.appointmentDate ?? DateTime.Today.ToString("yyyy-MM-dd");
+            string time      = (string)payload.appointmentTime ?? "09:00";
+            string combined  = $"{date} {time}";
 
-            var result = AppointmentService.CreateAppointment(patientId, doctorId, date);
+            var result = AppointmentService.CreateAppointment(patientId, doctorId, combined);
 
             if (result != null)
                 bridge.SendResponseToUI("ADD_APPOINTMENT_RESPONSE", result, true);
