@@ -143,6 +143,32 @@ namespace HospitalManagementSystem.Repositories
         }
 
         /// <summary>
+        /// Updates the username for an existing user. Returns false if the new username is already taken.
+        /// </summary>
+        public bool UpdateUsername(int userId, string newUsername)
+        {
+            using (var conn = new MySqlConnection(_connectionString))
+            {
+                conn.Open();
+                string checkQuery = "SELECT COUNT(*) FROM Users WHERE username = @user AND user_id != @uid";
+                using (var checkCmd = new MySqlCommand(checkQuery, conn))
+                {
+                    checkCmd.Parameters.AddWithValue("@user", newUsername);
+                    checkCmd.Parameters.AddWithValue("@uid", userId);
+                    if (Convert.ToInt32(checkCmd.ExecuteScalar()) > 0)
+                        return false;
+                }
+                string query = "UPDATE Users SET username = @user WHERE user_id = @uid";
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@uid", userId);
+                    cmd.Parameters.AddWithValue("@user", newUsername);
+                    return cmd.ExecuteNonQuery() > 0;
+                }
+            }
+        }
+
+        /// <summary>
         /// Updates the password for an existing user.
         /// </summary>
         public bool UpdatePassword(int userId, string password)

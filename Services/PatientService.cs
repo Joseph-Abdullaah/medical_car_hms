@@ -66,13 +66,18 @@ namespace HospitalManagementSystem.Services
         }
 
         /// <summary>
-        /// Updates an existing patient's profile fields.
+        /// Updates an existing patient's profile fields. Optionally updates username and/or password.
         /// </summary>
-        public bool UpdatePatientProfile(int userId, string fullName, string bloodType, string gender, string phone, string address)
+        public bool UpdatePatientProfile(int userId, string fullName, string bloodType, string gender, string phone, string address, string newUsername = "", string newPassword = "")
         {
             try
             {
-                return _patientRepository.UpdateProfile(userId, fullName, bloodType, gender, phone, address);
+                bool ok = _patientRepository.UpdateProfile(userId, fullName, bloodType, gender, phone, address);
+                if (!string.IsNullOrWhiteSpace(newUsername))
+                    _userRepository.UpdateUsername(userId, newUsername);
+                if (!string.IsNullOrWhiteSpace(newPassword))
+                    _userRepository.UpdatePassword(userId, newPassword);
+                return ok;
             }
             catch (Exception ex)
             {

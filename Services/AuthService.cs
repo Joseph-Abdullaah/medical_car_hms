@@ -76,6 +76,7 @@ namespace HospitalManagementSystem.Services
 
                 return new
                 {
+                    ok = true,
                     id = userId,
                     username = username,
                     fullName = fullName,

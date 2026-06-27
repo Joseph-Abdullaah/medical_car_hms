@@ -39,17 +39,19 @@ export default function App() {
     setActiveSection("dashboard");
   };
 
-  const handleRegisterSuccess = (registeredUser: User) => {
-    setUser(registeredUser);
-    localStorage.setItem("hms_session", JSON.stringify(registeredUser));
-    setView("portal");
-    setActiveSection("dashboard");
+  const handleRegisterSuccess = (_registeredUser: User) => {
+    setView("login");
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem("hms_session");
     setView("login");
+  };
+
+  const handleUserUpdate = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem("hms_session", JSON.stringify(updatedUser));
   };
 
   if (loading) {
@@ -118,10 +120,11 @@ export default function App() {
             )}
 
             {user.role === "patient" && (
-              <PatientPortal 
+              <PatientPortal
                 user={user}
                 activeSection={activeSection}
                 setActiveSection={setActiveSection}
+                onUserUpdate={handleUserUpdate}
               />
             )}
           </main>

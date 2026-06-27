@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Users,
   Stethoscope,
@@ -10,6 +10,7 @@ import {
   Pencil,
   AlertCircle,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import { Bridge, Patient, Doctor, Appointment, Department } from "../services/bridge";
 
@@ -50,6 +51,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   const showConfirm = (message: string, onConfirm: () => void) =>
     setConfirmDialog({ message, onConfirm });
 
+  // ── Toast error ───────────────────────────────────────────────────────────────
+  const [toastError, setToastError] = useState("");
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToastError = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastError(msg);
+    toastTimerRef.current = setTimeout(() => setToastError(""), 4500);
+  };
+
   // ── Modal state ───────────────────────────────────────────────────────────────
   const [showAddPatient,  setShowAddPatient]  = useState(false);
   const [showEditPatient, setShowEditPatient] = useState(false);
@@ -70,6 +81,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [editPatientForm, setEditPatientForm] = useState({
     fullName: "", bloodType: "", gender: "", phone: "", address: "",
+    newUsername: "", newPassword: "",
   });
 
   // ── Form state — Add Doctor ───────────────────────────────────────────────────
@@ -80,7 +92,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   // ── Form state — Edit Doctor ──────────────────────────────────────────────────
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   const [editDoctorForm, setEditDoctorForm] = useState({
-    fullName: "", deptId: "", newPassword: "",
+    fullName: "", deptId: "", newPassword: "", newUsername: "",
   });
 
   // ── Form state — Appointment ──────────────────────────────────────────────────
@@ -142,26 +154,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   // ── Handlers — Patients ───────────────────────────────────────────────────────
   const handleAddPatient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPatient.fullName || !newPatient.username || !newPatient.password) {
-      alert("Full name, username and password are required.");
-      return;
-    }
     try {
       await Bridge.addPatient(newPatient);
       setShowAddPatient(false);
       setNewPatient({ fullName: "", username: "", password: "", bloodType: "O+", gender: "Male", phone: "", address: "" });
       fetchData();
-    } catch (err: any) { alert(err.message || "Failed to add patient."); }
+    } catch (err: any) { showToastError(err.message || "Failed to add patient."); }
   };
 
   const openEditPatient = (p: Patient) => {
     setEditingPatient(p);
     setEditPatientForm({
-      fullName:  p.fullName,
-      bloodType: p.bloodType,
-      gender:    p.gender,
-      phone:     p.phone,
-      address:   p.address,
+      fullName:    p.fullName,
+      bloodType:   p.bloodType,
+      gender:      p.gender,
+      phone:       p.phone,
+      address:     p.address,
+      newUsername: p.username,
+      newPassword: "",
     });
     setShowEditPatient(true);
   };
@@ -177,11 +187,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
         editPatientForm.gender,
         editPatientForm.phone,
         editPatientForm.address,
+        editPatientForm.newUsername,
+        editPatientForm.newPassword,
       );
       setShowEditPatient(false);
       setEditingPatient(null);
       fetchData();
-    } catch (err: any) { alert(err.message || "Failed to update patient."); }
+    } catch (err: any) { showToastError(err.message || "Failed to update patient."); }
   };
 
   const handleDeletePatient = (id: string, name: string) =>
@@ -194,41 +206,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   // ── Handlers — Doctors ────────────────────────────────────────────────────────
   const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDoctor.fullName || !newDoctor.username || !newDoctor.password || !newDoctor.deptId) {
-      alert("All fields are required.");
-      return;
-    }
     try {
       await Bridge.addDoctor(newDoctor.fullName, newDoctor.username, newDoctor.password, parseInt(newDoctor.deptId));
       setShowAddDoctor(false);
       setNewDoctor({ fullName: "", username: "", password: "", deptId: "" });
       fetchData();
-    } catch (err: any) { alert(err.message || "Failed to add doctor."); }
+    } catch (err: any) { showToastError(err.message || "Failed to add doctor."); }
   };
 
   const openEditDoctor = (d: Doctor) => {
     setEditingDoctor(d);
-    setEditDoctorForm({ fullName: d.fullName, deptId: String(d.deptId), newPassword: "" });
+    setEditDoctorForm({ fullName: d.fullName, deptId: String(d.deptId), newPassword: "", newUsername: d.username });
     setShowEditDoctor(true);
   };
 
   const handleEditDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingDoctor || !editDoctorForm.fullName || !editDoctorForm.deptId) {
-      alert("Full name and department are required.");
-      return;
-    }
+    if (!editingDoctor) return;
     try {
       await Bridge.updateDoctor(
         editingDoctor.id,
         editDoctorForm.fullName,
         parseInt(editDoctorForm.deptId),
         editDoctorForm.newPassword,
+        editDoctorForm.newUsername,
       );
       setShowEditDoctor(false);
       setEditingDoctor(null);
       fetchData();
-    } catch (err: any) { alert(err.message || "Failed to update doctor."); }
+    } catch (err: any) { showToastError(err.message || "Failed to update doctor."); }
   };
 
   const handleDeleteDoctor = (id: string, name: string) =>
@@ -241,16 +247,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
   // ── Handlers — Appointments ───────────────────────────────────────────────────
   const handleAddAppt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAppt.patientId || !newAppt.doctorId || !newAppt.appointmentDate) {
-      alert("Please fill in all appointment fields.");
-      return;
-    }
     try {
       await Bridge.addAppointment(newAppt);
       setShowAddAppt(false);
       setNewAppt({ patientId: "", doctorId: "", appointmentDate: "", appointmentTime: "09:00" });
       fetchData();
-    } catch (err: any) { alert(err.message || "Failed to schedule appointment."); }
+    } catch (err: any) { showToastError(err.message || "Failed to schedule appointment."); }
   };
 
   // ── Handlers — Departments ────────────────────────────────────────────────────
@@ -319,6 +321,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Toast error notification */}
+      {toastError && (
+        <div className="fixed top-5 right-5 z-[60] flex items-start gap-3 bg-red-600 text-white text-sm font-semibold px-5 py-3.5 rounded-xl shadow-2xl max-w-sm animate-in slide-in-from-top-2 duration-200">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <span className="flex-1">{toastError}</span>
+          <button onClick={() => setToastError("")} className="hover:opacity-75 transition-opacity ml-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-xl text-sm text-red-600 font-medium flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />{error}
@@ -780,6 +792,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                     onChange={e => setEditPatientForm({...editPatientForm, fullName: e.target.value})} className={inputCls} />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">Username</label>
+                  <input type="text" value={editPatientForm.newUsername} placeholder="Leave blank to keep current"
+                    onChange={e => setEditPatientForm({...editPatientForm, newUsername: e.target.value})} className={inputCls} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-600">New Password <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input type="password" value={editPatientForm.newPassword} placeholder="••••••••"
+                    onChange={e => setEditPatientForm({...editPatientForm, newPassword: e.target.value})} className={inputCls} />
+                </div>
+                <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-600">Blood Type</label>
                   <select value={editPatientForm.bloodType} onChange={e => setEditPatientForm({...editPatientForm, bloodType: e.target.value})} className={inputCls}>
                     <option value="">Select...</option>
@@ -869,6 +891,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeSection }) => {
                 <label className="text-xs font-semibold text-slate-600">Full Name *</label>
                 <input required type="text" value={editDoctorForm.fullName}
                   onChange={e => setEditDoctorForm({...editDoctorForm, fullName: e.target.value})} className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Username</label>
+                <input type="text" value={editDoctorForm.newUsername} placeholder="Leave blank to keep current"
+                  onChange={e => setEditDoctorForm({...editDoctorForm, newUsername: e.target.value})} className={inputCls} />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-600">Department *</label>
