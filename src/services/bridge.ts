@@ -225,6 +225,8 @@ class BridgeService {
     gender: string,
     phone: string,
     address: string,
+    newUsername?: string,
+    newPassword?: string,
   ): Promise<boolean> {
     if (this.isWebView2Available()) {
       return new Promise((resolve) => {
@@ -237,7 +239,10 @@ class BridgeService {
             }
           } catch {}
         });
-        this.postToC_Sharp("UPDATE_PATIENT_PROFILE", { userId, fullName, bloodType, gender, phone, address });
+        this.postToC_Sharp("UPDATE_PATIENT_PROFILE", {
+          userId, fullName, bloodType, gender, phone, address,
+          username: newUsername ?? "", newPassword: newPassword ?? "",
+        });
       });
     }
     const response = await fetch(`/api/patients/${userId}`, {
@@ -306,6 +311,7 @@ class BridgeService {
     fullName: string,
     deptId: number,
     newPassword: string,
+    newUsername?: string,
   ): Promise<boolean> {
     if (this.isWebView2Available()) {
       return new Promise((resolve) => {
@@ -318,7 +324,10 @@ class BridgeService {
             }
           } catch {}
         });
-        this.postToC_Sharp("UPDATE_DOCTOR", { userId: id, fullName, deptId, newPassword });
+        this.postToC_Sharp("UPDATE_DOCTOR", {
+          userId: id, fullName, deptId, newPassword,
+          username: newUsername ?? "",
+        });
       });
     }
     const response = await fetch(`/api/doctors/${id}`, {

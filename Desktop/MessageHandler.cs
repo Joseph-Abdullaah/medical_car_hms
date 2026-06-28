@@ -131,14 +131,16 @@ namespace HospitalManagementSystem.Desktop
 
         private static void HandleUpdatePatientProfile(dynamic payload, WebViewBridge bridge)
         {
-            int    userId    = Convert.ToInt32(payload.userId);
-            string fullName  = (string)payload.fullName  ?? "";
-            string bloodType = (string)payload.bloodType ?? "";
-            string gender    = (string)payload.gender    ?? "";
-            string phone     = (string)payload.phone     ?? "";
-            string address   = (string)payload.address   ?? "";
+            int    userId      = Convert.ToInt32(payload.userId);
+            string fullName    = (string)payload.fullName    ?? "";
+            string bloodType   = (string)payload.bloodType   ?? "";
+            string gender      = (string)payload.gender      ?? "";
+            string phone       = (string)payload.phone       ?? "";
+            string address     = (string)payload.address     ?? "";
+            string newUsername = (string)payload.username    ?? "";
+            string newPassword = (string)payload.newPassword ?? "";
 
-            bool success = PatientService.UpdatePatientProfile(userId, fullName, bloodType, gender, phone, address);
+            bool success = PatientService.UpdatePatientProfile(userId, fullName, bloodType, gender, phone, address, newUsername, newPassword);
             bridge.SendResponseToUI("UPDATE_PATIENT_PROFILE_RESPONSE", new { userId }, success, success ? "" : "Update failed.");
         }
 
@@ -171,8 +173,9 @@ namespace HospitalManagementSystem.Desktop
             string fullName    = (string)payload.fullName    ?? "";
             int    deptId      = Convert.ToInt32(payload.deptId);
             string newPassword = (string)payload.newPassword ?? "";
+            string newUsername = (string)payload.username    ?? "";
 
-            bool success = DoctorService.UpdateDoctor(userId, fullName, deptId, newPassword);
+            bool success = DoctorService.UpdateDoctor(userId, fullName, deptId, newPassword, newUsername);
             bridge.SendResponseToUI("UPDATE_DOCTOR_RESPONSE", new { userId }, success, success ? "" : "Update failed.");
         }
 

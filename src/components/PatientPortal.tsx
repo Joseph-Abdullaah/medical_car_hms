@@ -17,6 +17,7 @@ interface PatientPortalProps {
   user: UserType;
   activeSection: string;
   setActiveSection: (sec: string) => void;
+  onUserUpdate: (user: UserType) => void;
 }
 
 const TIME_SLOTS = [
@@ -25,7 +26,7 @@ const TIME_SLOTS = [
   "15:00","15:30","16:00","16:30",
 ];
 
-export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSection, setActiveSection }) => {
+export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSection, setActiveSection, onUserUpdate }) => {
   // ── Data ─────────────────────────────────────────────────────────────────────
   const [patientProfile, setPatientProfile] = useState<Patient | null>(null);
   const [doctors,        setDoctors]        = useState<Doctor[]>([]);
@@ -49,6 +50,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSectio
   const [selectedDocId, setSelectedDocId] = useState("");
   const [bookingDate,   setBookingDate]   = useState("");
   const [bookingTime,   setBookingTime]   = useState("09:00");
+  const [bookError,     setBookError]     = useState("");
 
   // ── Custom confirm dialog ─────────────────────────────────────────────────────
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -126,7 +128,10 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSectio
         user.id, editFullName, editBloodType, editGender, editPhone, editAddress,
       );
       setProfileMsg(ok ? "Profile updated successfully." : "Update failed. Please try again.");
-      if (ok) fetchData();
+      if (ok) {
+        onUserUpdate({ ...user, fullName: editFullName });
+        fetchData();
+      }
     } catch { setProfileMsg("Error saving profile."); }
     finally { setProfileSaving(false); }
   };
@@ -134,8 +139,12 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSectio
   // ── Book appointment ──────────────────────────────────────────────────────────
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDocId || !bookingDate) { alert("Please select a doctor and a date."); return; }
+    if (!selectedDocId || !bookingDate) {
+      setBookError("Please select a doctor and a date.");
+      return;
+    }
     try {
+      setBookError("");
       await Bridge.addAppointment({
         patientId:       String(user.id),
         doctorId:        selectedDocId,
@@ -148,7 +157,7 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSectio
       setBookingTime("09:00");
     } catch (err) {
       console.error(err);
-      alert("Failed to book appointment. Please try again.");
+      setBookError("Failed to book appointment. Please try again.");
     }
   };
 
@@ -365,6 +374,11 @@ export const PatientPortal: React.FC<PatientPortalProps> = ({ user, activeSectio
           </div>
 
           <form onSubmit={handleBookAppointment} className="p-8">
+            {bookError && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 font-medium flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />{bookError}
+              </div>
+            )}
 
             {/* Step 1 — Doctor selection */}
             {bookingStep === 1 && (

@@ -63,13 +63,15 @@ namespace HospitalManagementSystem.Services
         }
 
         /// <summary>
-        /// Updates a doctor's profile (fullName, deptId) and optionally resets their password.
+        /// Updates a doctor's profile (fullName, deptId) and optionally resets their username/password.
         /// </summary>
-        public bool UpdateDoctor(int userId, string fullName, int deptId, string newPassword)
+        public bool UpdateDoctor(int userId, string fullName, int deptId, string newPassword, string newUsername = "")
         {
             try
             {
                 bool ok = _doctorRepository.UpdateProfile(userId, fullName, deptId);
+                if (!string.IsNullOrWhiteSpace(newUsername))
+                    _userRepository.UpdateUsername(userId, newUsername);
                 if (!string.IsNullOrWhiteSpace(newPassword))
                     _userRepository.UpdatePassword(userId, newPassword);
                 return ok;
